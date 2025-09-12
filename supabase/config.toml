@@ -1,0 +1,201 @@
+# Supabase Configuration for SceneScout v14
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+smtp_port = 54325
+pop3_port = 54326
+
+[storage]
+enabled = true
+port = 54327
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+port = 54328
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://scenescout.app"]
+jwt_expiry = 3600
+enable_signup = true
+enable_email_confirmations = false
+enable_email_autoconfirm = false
+enable_phone_confirmations = false
+enable_phone_autoconfirm = false
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+
+[auth.sms]
+enable_signup = false
+enable_confirmations = false
+
+# OAuth providers (configure as needed)
+# [auth.external.apple]
+# enabled = false
+# client_id = ""
+# secret = ""
+
+# [auth.external.azure]
+# enabled = false
+# client_id = ""
+# secret = ""
+# url = ""
+
+# [auth.external.bitbucket]
+# enabled = false
+# client_id = ""
+# secret = ""
+
+# [auth.external.discord]
+# enabled = false
+# client_id = ""
+# secret = ""
+
+# [auth.external.facebook]
+# enabled = false
+# client_id = ""
+# secret = ""
+
+[auth.external.github]
+enabled = true
+client_id = "env(GITHUB_CLIENT_ID)"
+secret = "env(GITHUB_CLIENT_SECRET)"
+
+[auth.external.gitlab]
+enabled = false
+client_id = ""
+secret = ""
+url = ""
+
+[auth.external.google]
+enabled = true
+client_id = "env(GOOGLE_CLIENT_ID)"
+secret = "env(GOOGLE_CLIENT_SECRET)"
+skip_nonce_check = false
+
+# [auth.external.keycloak]
+# enabled = false
+# client_id = ""
+# secret = ""
+# url = ""
+
+# [auth.external.linkedin]
+# enabled = false
+# client_id = ""
+# secret = ""
+
+# [auth.external.notion]
+# enabled = false
+# client_id = ""
+# secret = ""
+
+# [auth.external.twitch]
+# enabled = false
+# client_id = ""
+# secret = ""
+
+# [auth.external.twitter]
+# enabled = false
+# client_id = ""
+# secret = ""
+
+# [auth.external.slack]
+# enabled = false
+# client_id = ""
+# secret = ""
+
+# [auth.external.spotify]
+# enabled = false
+# client_id = ""
+# secret = ""
+
+# [auth.external.workos]
+# enabled = false
+# client_id = ""
+# secret = ""
+# url = ""
+
+# [auth.external.zoom]
+# enabled = false
+# client_id = ""
+# secret = ""
+
+[edge_runtime]
+enabled = true
+port = 54329
+inspector_port = 54330
+
+# Edge Functions configuration
+[functions.ingest_ticketmaster]
+verify_jwt = false
+
+[functions.ingest_eventbrite]
+verify_jwt = false
+
+[functions.ingest_songkick]
+verify_jwt = false
+
+[functions.ingest_meetup]
+verify_jwt = false
+
+[functions.ingest_places_google]
+verify_jwt = false
+
+[functions.ingest_places_yelp]
+verify_jwt = false
+
+[functions.daily_digest]
+verify_jwt = false
+
+[functions.reminders]
+verify_jwt = false
+
+[functions.enrich_images]
+verify_jwt = false
+
+[functions.hotness_ml]
+verify_jwt = false
+
+[analytics]
+enabled = false
+port = 54327
+vector_port = 54328
+# Setup BigQuery project to use analytics
+
+[realtime]
+enabled = true
+ip_version = "IPv4"
+
+# Environment variables (set these in production)
+# TICKETMASTER_API_KEY=your_key_here
+# EVENTBRITE_TOKEN=your_token_here
+# SONGKICK_API_KEY=your_key_here
+# MEETUP_ACCESS_TOKEN=your_token_here
+# GOOGLE_PLACES_API_KEY=your_key_here
+# YELP_API_KEY=your_key_here
+# OPENAI_API_KEY=your_key_here
+# RESEND_API_KEY=your_key_here
+# CLOUDINARY_CLOUD_NAME=your_cloudinary_name
+# GITHUB_CLIENT_ID=your_github_client_id
+# GITHUB_CLIENT_SECRET=your_github_client_secret
+# GOOGLE_CLIENT_ID=your_google_client_id
+# GOOGLE_CLIENT_SECRET=your_google_client_secret
