@@ -9,19 +9,36 @@ export interface Event {
   city_name?: string
   category: string
   date: string
+  event_date?: string // Alternative date field for compatibility
   time?: string
   end_time?: string
   price?: number
+  price_min?: number
+  price_max?: number
   currency?: string
   image_url?: string
+  video_url?: string
   website_url?: string
   ticket_url?: string
   tags?: string[]
   is_featured: boolean
+  is_free?: boolean
   is_approved: boolean
+  status?: 'active' | 'cancelled' | 'postponed'
+  view_count?: number
   created_at: string
   updated_at: string
   submitted_by: string
+  venue?: {
+    name: string
+    latitude?: number
+    longitude?: number
+    address?: string
+  }
+  city?: {
+    name: string
+    slug: string
+  }
 }
 
 export interface Venue {
@@ -445,4 +462,209 @@ export type SubscriptionTier = UserProfile['subscription_tier']
 export type SubscriptionStatus = UserProfile['subscription_status']
 export type PlanStatus = Plan['status']
 export type VenueType = string
-export type EventCategory = string
+export type EventCategory = 'music' | 'sports' | 'arts' | 'food' | 'tech' | 'social' | 'business' | 'education' | 'health' | 'family' | 'other'
+
+// Netflix-style streaming interface types
+export interface CategoryRow {
+  id: string
+  title: string
+  category: EventCategory
+  events: Event[]
+  loading?: boolean
+  hasMore?: boolean
+}
+
+export interface FeaturedEvent extends Event {
+  featured_video_url?: string
+  featured_description?: string
+  banner_image_url?: string
+  hotness_score: number
+}
+
+export interface VideoEvent extends Event {
+  video_url: string
+  video_thumbnail_url: string
+  video_duration?: number
+  auto_play?: boolean
+}
+
+export interface EventHoverInfo {
+  event: Event
+  isVisible: boolean
+  position: { x: number; y: number }
+  delay?: number
+}
+
+// Sidebar types
+export interface SidebarState {
+  isOpen: boolean
+  isMinimized: boolean
+  activeItem?: string
+}
+
+export interface SidebarItem {
+  id: string
+  title: string
+  icon: React.ComponentType<{ className?: string }>
+  href: string
+  badge?: number
+  isActive?: boolean
+  children?: SidebarItem[]
+}
+
+// Map marker types
+export interface MapMarker {
+  id: string
+  eventId: string
+  latitude: number
+  longitude: number
+  category: EventCategory
+  title: string
+  date: string
+  venue: string
+  price?: string
+  priceRange?: { min?: number; max?: number }
+  imageUrl?: string
+  videoUrl?: string
+  size: 'small' | 'medium' | 'large'
+  clusterId?: string
+}
+
+export interface MapCluster {
+  id: string
+  latitude: number
+  longitude: number
+  count: number
+  categories: EventCategory[]
+  bounds: MapBounds
+}
+
+export interface MapFilter {
+  categories: EventCategory[]
+  dateRange: { start: Date; end: Date }
+  priceRange: { min: number; max: number }
+  isFree: boolean
+  showVideoOnly: boolean
+}
+
+// Enhanced event filters for Netflix-style browsing
+export interface NetflixFilters extends EventFilters {
+  featured?: boolean
+  hasVideo?: boolean
+  trending?: boolean
+  nearbyOnly?: boolean
+  savedEvents?: boolean
+  categories?: EventCategory[]
+  minHotnessScore?: number
+  virtualEvents?: boolean
+}
+
+// Infinite scroll types
+export interface InfiniteScrollState<T> {
+  items: T[]
+  loading: boolean
+  error: string | null
+  hasNextPage: boolean
+  isFetchingNextPage: boolean
+  totalItems?: number
+  currentPage: number
+}
+
+export interface VirtualScrollOptions {
+  itemHeight: number
+  containerHeight: number
+  overscan: number
+  threshold: number
+}
+
+// Video player types
+export interface VideoPlayerState {
+  isPlaying: boolean
+  isMuted: boolean
+  currentTime: number
+  duration: number
+  volume: number
+  isFullscreen: boolean
+  quality: 'auto' | '480p' | '720p' | '1080p'
+  playbackRate: number
+}
+
+// Event interaction types
+export interface EventInteraction {
+  eventId: string
+  type: 'view' | 'hover' | 'click' | 'share' | 'bookmark' | 'play_video'
+  timestamp: Date
+  duration?: number
+  metadata?: Record<string, any>
+}
+
+// Layout types for responsive design
+export interface LayoutConfig {
+  sidebar: {
+    width: number
+    collapsedWidth: number
+    breakpoint: number
+  }
+  carousel: {
+    itemWidth: number
+    itemHeight: number
+    itemsPerRow: { mobile: number; tablet: number; desktop: number }
+    gap: number
+  }
+  map: {
+    defaultZoom: number
+    maxZoom: number
+    minZoom: number
+    clusterRadius: number
+  }
+}
+
+// Search and discovery types
+export interface SearchSuggestion {
+  id: string
+  text: string
+  type: 'event' | 'venue' | 'city' | 'category'
+  count?: number
+  imageUrl?: string
+}
+
+export interface TrendingData {
+  events: Event[]
+  categories: { category: EventCategory; count: number }[]
+  cities: { city: City; eventCount: number }[]
+  searches: string[]
+  refreshedAt: Date
+}
+
+// Performance monitoring types
+export interface PerformanceMetrics {
+  pageLoadTime: number
+  apiResponseTime: number
+  imageLoadTime: number
+  videoLoadTime?: number
+  interactionDelay: number
+  scrollPerformance: number
+}
+
+// Accessibility types
+export interface AccessibilitySettings {
+  reducedMotion: boolean
+  highContrast: boolean
+  fontSize: 'small' | 'medium' | 'large'
+  focusVisible: boolean
+  screenReaderOptimized: boolean
+}
+
+// Error boundary types
+export interface ErrorInfo {
+  componentStack: string
+  errorBoundary?: string
+  eventId?: string
+}
+
+export interface ErrorState {
+  hasError: boolean
+  error?: Error
+  errorInfo?: ErrorInfo
+  retry?: () => void
+}

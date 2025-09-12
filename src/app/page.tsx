@@ -1,136 +1,321 @@
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import EventCard from '@/components/EventCard'
-import BlurImage from '@/components/BlurImage'
-import Link from 'next/link'
+'use client'
 
-// TODO: Fetch from Supabase
-const featuredCities = [
-  { id: '1', name: 'New York', slug: 'new-york', image: '/cities/nyc.jpg', eventCount: 245 },
-  { id: '2', name: 'London', slug: 'london', image: '/cities/london.jpg', eventCount: 189 },
-  { id: '3', name: 'Tokyo', slug: 'tokyo', image: '/cities/tokyo.jpg', eventCount: 156 },
-  { id: '4', name: 'Berlin', slug: 'berlin', image: '/cities/berlin.jpg', eventCount: 134 },
-]
+import { useState, useEffect } from 'react'
+import { createSafeSupabaseClient } from '@/lib/supabase'
+import AppLayout from '@/components/layout/AppLayout'
+import { FeaturedBanner } from '@/components/events/FeaturedBanner'
+import { CategoryRow } from '@/components/events/CategoryRow'
+import { FeaturedEvent, CategoryRow as CategoryRowType, Event, EventHoverInfo, EventCategory } from '@/types'
 
-// TODO: Fetch from Supabase
-const featuredEvents = [
-  {
-    id: '1',
-    title: 'Underground Electronic Night',
-    venue: 'Warehouse 23',
-    city: 'Berlin',
-    date: '2024-01-15',
-    image: '/events/electronic.jpg',
-    price: 25,
-  },
-  {
-    id: '2',
-    title: 'Jazz & Wine Evening',
-    venue: 'Blue Note',
-    city: 'New York',
-    date: '2024-01-16',
-    image: '/events/jazz.jpg',
-    price: 45,
-  },
+const categories: { id: EventCategory; title: string }[] = [
+  { id: 'music', title: '🎵 Music Events' },
+  { id: 'sports', title: '⚽ Sports & Recreation' },
+  { id: 'arts', title: '🎨 Arts & Culture' },
+  { id: 'food', title: '🍽️ Food & Drink' },
+  { id: 'tech', title: '💻 Tech & Innovation' },
+  { id: 'social', title: '👥 Social & Networking' },
+  { id: 'business', title: '💼 Business Events' },
+  { id: 'education', title: '📚 Learning & Education' }
 ]
 
 export default function HomePage() {
+  const [featuredEvents, setFeaturedEvents] = useState<FeaturedEvent[]>([])
+  const [categoryRows, setCategoryRows] = useState<CategoryRowType[]>([])
+  const [loading, setLoading] = useState(true)
+  const [hoveredEvent, setHoveredEvent] = useState<EventHoverInfo | null>(null)
+  const [playingVideoId, setPlayingVideoId] = useState<string | null>(null)
+
+  const supabase = createSafeSupabaseClient()
+
+  useEffect(() => {
+    fetchFeaturedEvents()
+    fetchCategoryEvents()
+  }, [])
+
+  const fetchFeaturedEvents = async () => {
+    try {
+      if (!supabase) {
+        console.log('Supabase not configured, using mock data')
+        setFeaturedEvents(mockFeaturedEvents)
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('events')
+        .select(`
+          *,
+          venue:venues(name),
+          city:cities(name, slug)
+        `)
+        .eq('is_featured', true)
+        .eq('is_approved', true)
+        .gte('date', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(5)
+
+      if (error) {
+        console.error('Error fetching featured events:', error)
+        // Use mock data as fallback
+        setFeaturedEvents(mockFeaturedEvents)
+        return
+      }
+
+      const transformedEvents: FeaturedEvent[] = data.map(event => ({
+        ...event,
+        event_date: event.date,
+        venue_name: event.venue?.name,
+        city_name: event.city?.name,
+        hotness_score: Math.random() * 100, // TODO: Implement real hotness calculation
+        featured_description: event.description?.slice(0, 200) + '...',
+      })) as FeaturedEvent[]
+
+      setFeaturedEvents(transformedEvents.length > 0 ? transformedEvents : mockFeaturedEvents)
+    } catch (error) {
+      console.error('Error fetching featured events:', error)
+      setFeaturedEvents(mockFeaturedEvents)
+    }
+  }
+
+  const fetchCategoryEvents = async () => {
+    try {
+      const categoryData: CategoryRowType[] = []
+
+      if (!supabase) {
+        console.log('Supabase not configured, using mock category data')
+        // Use mock data for all categories
+        for (const category of categories) {
+          categoryData.push({
+            id: category.id,
+            title: category.title,
+            category: category.id,
+            events: generateMockEvents(category.id, 10)
+          })
+        }
+        setCategoryRows(categoryData)
+        setLoading(false)
+        return
+      }
+
+      for (const category of categories) {
+        const { data, error } = await supabase
+          .from('events')
+          .select(`
+            *,
+            venue:venues(name),
+            city:cities(name, slug)
+          `)
+          .eq('category', category.id)
+          .eq('is_approved', true)
+          .gte('date', new Date().toISOString())
+          .order('created_at', { ascending: false })
+          .limit(20)
+
+        if (error) {
+          console.error(`Error fetching ${category.id} events:`, error)
+          // Use mock data for this category
+          categoryData.push({
+            id: category.id,
+            title: category.title,
+            category: category.id,
+            events: generateMockEvents(category.id, 10),
+            loading: false,
+          })
+          continue
+        }
+
+        const transformedEvents: Event[] = data.map(event => ({
+          ...event,
+          event_date: event.date,
+          venue_name: event.venue?.name,
+          city_name: event.city?.name,
+        })) as Event[]
+
+        categoryData.push({
+          id: category.id,
+          title: category.title,
+          category: category.id,
+          events: transformedEvents.length > 0 ? transformedEvents : generateMockEvents(category.id, 10),
+          loading: false,
+          hasMore: transformedEvents.length === 20,
+        })
+      }
+
+      setCategoryRows(categoryData)
+      setLoading(false)
+    } catch (error) {
+      console.error('Error fetching category events:', error)
+      // Generate all mock data
+      const mockCategoryRows = categories.map(category => ({
+        id: category.id,
+        title: category.title,
+        category: category.id,
+        events: generateMockEvents(category.id, 10),
+        loading: false,
+      }))
+      setCategoryRows(mockCategoryRows)
+      setLoading(false)
+    }
+  }
+
+  const handleEventHover = (info: EventHoverInfo) => {
+    setHoveredEvent(info.isVisible ? info : null)
+  }
+
+  const handleVideoPlay = (eventId: string) => {
+    setPlayingVideoId(eventId)
+  }
+
+  const handleLoadMoreCategory = async (categoryId: string) => {
+    setCategoryRows(prev => 
+      prev.map(row => 
+        row.id === categoryId ? { ...row, loading: true } : row
+      )
+    )
+
+    // TODO: Implement load more functionality
+    setTimeout(() => {
+      setCategoryRows(prev => 
+        prev.map(row => 
+          row.id === categoryId 
+            ? { 
+                ...row, 
+                loading: false, 
+                events: [...row.events, ...generateMockEvents(categoryId as EventCategory, 5)]
+              } 
+            : row
+        )
+      )
+    }, 1000)
+  }
+
   return (
-    <div className="min-h-screen">
-      {/* Hero Section */}
-      <section className="relative h-screen flex items-center justify-center gradient-bg text-white">
-        <div className="text-center z-10 space-y-8">
-          <h1 className="text-5xl md:text-7xl font-bold tracking-tight">
-            SceneScout
-          </h1>
-          <p className="text-xl md:text-2xl max-w-2xl mx-auto px-4">
-            Discover the pulse of urban culture. Find events, venues, and experiences that define your city.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="bg-white text-black hover:bg-gray-100">
-              <Link href="/feed">Explore Events</Link>
-            </Button>
-            <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-black">
-              <Link href="/submit">Submit Event</Link>
-            </Button>
-          </div>
-        </div>
-        <div className="absolute inset-0 bg-black/20" />
-      </section>
+    <AppLayout>
+      <div className="min-h-screen bg-black text-white">
+        {/* Featured Banner */}
+        <FeaturedBanner 
+          events={featuredEvents}
+          autoRotate={true}
+          rotateInterval={8000}
+        />
 
-      {/* Featured Cities */}
-      <section className="py-16 px-4 max-w-7xl mx-auto">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Explore Cities</h2>
-          <p className="text-muted-foreground text-lg">
-            Discover what's happening in cities around the world
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {featuredCities.map((city) => (
-            <Link key={city.id} href={`/city/${city.slug}`} className="group">
-              <Card className="overflow-hidden hover:shadow-lg transition-shadow">
-                <div className="relative h-48">
-                  <BlurImage
-                    src={city.image}
-                    alt={city.name}
-                    fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <div className="absolute inset-0 bg-black/40 group-hover:bg-black/30 transition-colors" />
-                  <div className="absolute bottom-4 left-4 text-white">
-                    <h3 className="text-xl font-bold">{city.name}</h3>
-                    <p className="text-sm opacity-90">{city.eventCount} events</p>
-                  </div>
-                </div>
-              </Card>
-            </Link>
+        {/* Category Rows */}
+        <div className="space-y-8 py-8">
+          {categoryRows.map((categoryRow, index) => (
+            <CategoryRow
+              key={categoryRow.id}
+              categoryRow={categoryRow}
+              onEventHover={handleEventHover}
+              onVideoPlay={handleVideoPlay}
+              onLoadMore={() => handleLoadMoreCategory(categoryRow.id)}
+            />
           ))}
         </div>
-      </section>
 
-      {/* Featured Events */}
-      <section className="py-16 px-4 bg-muted/50">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Trending Events</h2>
-            <p className="text-muted-foreground text-lg">
-              Don't miss these popular happenings
-            </p>
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
           </div>
+        )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {featuredEvents.map((event) => (
-              <EventCard key={event.id} event={event} />
-            ))}
+        {/* Event Hover Preview */}
+        {hoveredEvent && hoveredEvent.isVisible && (
+          <div
+            className="fixed z-50 pointer-events-none"
+            style={{
+              left: hoveredEvent.position.x + 280, // Offset to avoid overlap
+              top: hoveredEvent.position.y,
+            }}
+          >
+            <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 w-80 shadow-2xl">
+              <h3 className="text-white font-semibold text-lg mb-2">
+                {hoveredEvent.event.title}
+              </h3>
+              <p className="text-gray-300 text-sm mb-3 line-clamp-3">
+                {hoveredEvent.event.description}
+              </p>
+              <div className="space-y-2 text-sm text-gray-400">
+                <div>📅 {new Date(hoveredEvent.event.event_date || hoveredEvent.event.date).toLocaleDateString()}</div>
+                <div>📍 {hoveredEvent.event.venue_name}</div>
+                <div>🏷️ {hoveredEvent.event.category}</div>
+                {hoveredEvent.event.price_min && (
+                  <div>💰 From ${hoveredEvent.event.price_min}</div>
+                )}
+              </div>
+            </div>
           </div>
-
-          <div className="text-center mt-12">
-            <Button size="lg">
-              <Link href="/feed">View All Events</Link>
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-16 px-4 gradient-bg text-white">
-        <div className="max-w-4xl mx-auto text-center space-y-8">
-          <h2 className="text-3xl md:text-4xl font-bold">Ready to Explore?</h2>
-          <p className="text-xl">
-            Join thousands of culture enthusiasts discovering the best events in their cities
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="bg-white text-black hover:bg-gray-100">
-              <Link href="/feed">Start Exploring</Link>
-            </Button>
-            <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-black">
-              <Link href="/pricing">View Plans</Link>
-            </Button>
-          </div>
-        </div>
-      </section>
-    </div>
+        )}
+      </div>
+    </AppLayout>
   )
+}
+
+// Mock data for fallback
+const mockFeaturedEvents: FeaturedEvent[] = [
+  {
+    id: '1',
+    title: 'Electric Nights Festival',
+    description: 'The biggest electronic music festival in the city with world-class DJs',
+    date: '2024-02-15',
+    event_date: '2024-02-15',
+    venue_id: '1',
+    venue_name: 'Metropolitan Stadium',
+    city_id: '1',
+    city_name: 'New York',
+    category: 'music',
+    image_url: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800',
+    banner_image_url: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1200',
+    price_min: 75,
+    price_max: 250,
+    is_featured: true,
+    is_free: false,
+    is_approved: true,
+    hotness_score: 95,
+    status: 'active',
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+    submitted_by: 'admin'
+  },
+  // Add more mock events...
+]
+
+function generateMockEvents(category: EventCategory, count: number): Event[] {
+  const mockTitles = {
+    music: ['Live Jazz Night', 'Rock Concert', 'DJ Set', 'Classical Symphony', 'Folk Festival'],
+    sports: ['Basketball Game', 'Soccer Match', 'Tennis Tournament', 'Marathon', 'Boxing Match'],
+    arts: ['Art Gallery Opening', 'Theater Performance', 'Dance Show', 'Poetry Reading', 'Film Screening'],
+    food: ['Wine Tasting', 'Food Truck Rally', 'Cooking Class', 'Restaurant Opening', 'Farmers Market'],
+    tech: ['Tech Conference', 'Startup Demo', 'Coding Workshop', 'AI Symposium', 'Blockchain Summit'],
+    social: ['Networking Event', 'Meetup', 'Community Gathering', 'Social Mixer', 'Speed Networking'],
+    business: ['Business Conference', 'Trade Show', 'Workshop', 'Seminar', 'Industry Forum'],
+    education: ['Workshop', 'Seminar', 'Lecture', 'Book Club', 'Study Group'],
+    health: ['Fitness Class', 'Wellness Workshop', 'Meditation Session', 'Health Fair', 'Yoga Class'],
+    family: ['Family Fun Day', 'Kids Workshop', 'Parent Meetup', 'Story Time', 'Playground Event'],
+    other: ['Community Event', 'Celebration', 'Festival', 'Market', 'Pop-up Event']
+  }
+
+  return Array.from({ length: count }, (_, i) => {
+    const eventDate = new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString()
+    return ({
+      id: `${category}-${i}`,
+      title: mockTitles[category]?.[i % 5] || `${category} Event ${i}`,
+      description: `An amazing ${category} event you won't want to miss`,
+      date: eventDate,
+      event_date: eventDate,
+      venue_id: `venue-${i}`,
+      venue_name: `Venue ${i + 1}`,
+      city_id: 'city-1',
+      city_name: 'New York',
+      category,
+      image_url: `https://images.unsplash.com/photo-${1500000000000 + i}?w=400&h=225&fit=crop`,
+      price_min: Math.random() > 0.3 ? Math.floor(Math.random() * 100) + 10 : undefined,
+      is_featured: Math.random() > 0.8,
+      is_free: Math.random() > 0.7,
+      is_approved: true,
+      status: 'active' as const,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      submitted_by: 'user'
+    })
+  })
 }

@@ -1,16 +1,15 @@
 import './globals.css'
 import { Inter } from 'next/font/google'
 import { Metadata } from 'next'
-import Navigation from '@/components/Navigation'
-import Footer from '@/components/Footer'
-import { Toaster } from '@/components/ui/toaster'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'SceneScout - Discover Urban Culture & Events',
-  description: 'Discover the best events, venues, and cultural experiences in cities worldwide.',
-  keywords: ['events', 'culture', 'cities', 'venues', 'nightlife', 'entertainment'],
+  description: 'Discover the best events, venues, and cultural experiences in cities worldwide with our Netflix-style interface.',
+  keywords: ['events', 'culture', 'cities', 'venues', 'nightlife', 'entertainment', 'streaming', 'discovery'],
+  themeColor: '#000000',
+  viewport: 'width=device-width, initial-scale=1',
 }
 
 interface RootLayoutProps {
@@ -19,16 +18,14 @@ interface RootLayoutProps {
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
-        <div className="min-h-screen flex flex-col">
-          <Navigation />
-          <main className="flex-1">
-            {children}
-          </main>
-          <Footer />
-        </div>
-        <Toaster />
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <head>
+        <meta name="color-scheme" content="dark" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      </head>
+      <body className={`${inter.className} bg-black text-white antialiased`}>
+        {children}
       </body>
     </html>
   )

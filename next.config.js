@@ -22,6 +22,11 @@ const nextConfig = {
     ];
   },
   async rewrites() {
+    // Only add rewrites if Supabase URL is configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.startsWith('TODO')) {
+      return [];
+    }
+    
     return [
       {
         source: '/api/img',

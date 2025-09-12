@@ -1,10 +1,54 @@
 import { createClient } from '@supabase/supabase-js'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
-// TODO: Add your Supabase project URL and anon key
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://your-project.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'your-anon-key'
+// Check if Supabase is properly configured
+function isSupabaseConfigured(): boolean {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  
+  return !!(
+    supabaseUrl &&
+    supabaseAnonKey &&
+    !supabaseUrl.includes('TODO') &&
+    !supabaseAnonKey.includes('TODO') &&
+    supabaseUrl.startsWith('http')
+  )
+}
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Safe Supabase client creation
+let supabase: any = null
+
+if (isSupabaseConfigured()) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  supabase = createClient(supabaseUrl, supabaseAnonKey)
+} else {
+  console.warn('Supabase is not properly configured. Using mock data fallback.')
+}
+
+export { supabase }
+
+// Safe client component client creation
+export function createSafeSupabaseClient() {
+  if (!isSupabaseConfigured()) {
+    console.warn('Supabase is not properly configured. Using mock data fallback.')
+    return null
+  }
+
+  try {
+    return createClientComponentClient()
+  } catch (error) {
+    console.error('Failed to create Supabase client:', error)
+    return null
+  }
+}
+
+export function getSupabaseStatus() {
+  return {
+    configured: isSupabaseConfigured(),
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  }
+}
 
 // Database types
 export interface Event {
