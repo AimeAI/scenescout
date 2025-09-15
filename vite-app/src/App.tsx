@@ -14,6 +14,8 @@ import Auth from '@/pages/Auth'
 import Pricing from '@/pages/Pricing'
 import { UpgradePage } from '@/pages/UpgradePage'
 import { AdminIngestPage } from '@/pages/AdminIngestPage'
+import { VenuesPage } from '@/pages/VenuesPage'
+import { VenueDetailsPage } from '@/pages/VenueDetailsPage'
 
 function App() {
   return (
@@ -33,6 +35,8 @@ function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
           <Route path="map" element={<MapPage />} />
+          <Route path="venues" element={<VenuesPage />} />
+          <Route path="venues/:id" element={<VenueDetailsPage />} />
           <Route path="discover" element={<DiscoverPage />} />
           <Route path="event/:id" element={<EventDetailsPage />} />
           <Route path="upgrade" element={<UpgradePage />} />

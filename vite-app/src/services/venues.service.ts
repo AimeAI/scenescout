@@ -32,7 +32,7 @@ export const venuesService = {
           *,
           city:cities(id, name, slug)
         `)
-        .eq('is_approved', true)
+        .eq('is_active', true)
         .order('created_at', { ascending: false })
 
       // Apply filters
@@ -172,7 +172,7 @@ export const venuesService = {
       let query = supabase
         .from('venues')
         .select('*')
-        .eq('is_approved', true)
+        .eq('is_active', true)
 
       // Filter by external_id pattern to identify source
       if (source === 'google_places') {
@@ -200,7 +200,7 @@ export const venuesService = {
       const { data, error } = await supabase
         .from('venues')
         .select('venue_type')
-        .eq('is_approved', true)
+        .eq('is_active', true)
 
       if (error) throw error
 
@@ -228,7 +228,7 @@ export const venuesService = {
       const { data, error } = await supabase
         .from('venues')
         .select('*')
-        .eq('is_approved', true)
+        .eq('is_active', true)
         .or(`name.ilike.%${query}%,address.ilike.%${query}%`)
         .order('name')
         .limit(limit)
@@ -252,7 +252,7 @@ export const venuesService = {
       const { data: venues, error } = await supabase
         .from('venues')
         .select('external_id, venue_type, created_at')
-        .eq('is_approved', true)
+        .eq('is_active', true)
 
       if (error) throw error
 

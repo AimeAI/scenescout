@@ -5,6 +5,7 @@ import { Search, Filter, Grid, List, MapPin, Building2 } from 'lucide-react'
 import { useLocalEvents } from '@/hooks/useLocationEvents'
 import { useNearbyVenues } from '@/hooks/useVenues'
 import { useBackgroundIngestion } from '@/hooks/useBackgroundIngestion'
+import { apiIngestionService } from '@/services/api-ingestion.service'
 import { locationService } from '@/services/location.service'
 import { EventCard } from '@/components/events/EventCard'
 import { VenueCard } from '@/components/venues/VenueCard'
@@ -50,10 +51,8 @@ L.Marker.prototype.options.icon = DefaultIcon
 
 // Component to handle map events
 function MapEventHandler() {
-  const { debouncedIngestForLocation } = useBackgroundIngestion()
-  
   useMapEvents({
-    moveend: (e) => {
+    moveend: async (e) => {
       const map = e.target
       const center = map.getCenter()
       const bounds = map.getBounds()
@@ -65,8 +64,16 @@ function MapEventHandler() {
         map.distance([center.lat, center.lng], [center.lat, ne.lng])
       )
       
-      // Trigger background ingestion for the new area
-      debouncedIngestForLocation(center.lat, center.lng, Math.min(radius, 5000))
+      // Trigger real-time venue ingestion for the new area
+      try {
+        await apiIngestionService.ingestNearbyVenues({
+          lat: center.lat,
+          lng: center.lng,
+          radius: Math.min(radius, 3000) // Max 3km radius
+        })
+      } catch (error) {
+        console.error('Background ingestion failed:', error)
+      }
     }
   })
   
@@ -148,7 +155,7 @@ export function MapPage() {
     )
   }, [venues, searchQuery])
 
-  if (error) {
+  if (eventsError) {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-center">

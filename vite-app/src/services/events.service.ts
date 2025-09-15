@@ -33,8 +33,6 @@ export const eventsService = {
           venue:venues(id, name, address, latitude, longitude),
           city:cities(id, name, slug)
         `)
-        .eq('is_approved', true)
-        .eq('status', filters.status || 'active')
         .gte('date', new Date().toISOString().split('T')[0])
         .order('date', { ascending: true })
 
