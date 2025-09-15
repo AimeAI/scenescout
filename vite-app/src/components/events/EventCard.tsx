@@ -24,6 +24,8 @@ interface Event {
   date: string
   time?: string | null
   venue_name?: string | null
+  venue_id?: string | null
+  venue_address?: string | null
   image_url?: string | null
   video_url?: string | null
   price_min?: number | null
@@ -31,6 +33,13 @@ interface Event {
   is_free?: boolean
   category: string
   source?: string | null
+  venue?: {
+    id: string
+    name: string
+    address?: string
+    venue_type?: string
+    rating?: number
+  }
 }
 
 interface EventCardProps {
@@ -199,10 +208,34 @@ export function EventCard({
             </span>
           </div>
           
-          {event.venue_name && (
+          {(event.venue_name || event.venue) && (
             <div className="flex items-center space-x-2">
               <MapPin size={14} />
-              <span className="truncate">{event.venue_name}</span>
+              <div className="flex-1 min-w-0">
+                {event.venue?.id ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      window.location.href = `/venues/${event.venue!.id}`
+                    }}
+                    className="text-left truncate text-purple-400 hover:text-purple-300 transition-colors underline decoration-dotted underline-offset-2"
+                  >
+                    {event.venue.name}
+                  </button>
+                ) : (
+                  <span className="truncate">{event.venue_name}</span>
+                )}
+                {event.venue?.venue_type && (
+                  <div className="text-xs text-white/50 capitalize">
+                    {event.venue.venue_type}
+                  </div>
+                )}
+                {event.venue?.rating && (
+                  <div className="text-xs text-yellow-400">
+                    ★ {event.venue.rating.toFixed(1)}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

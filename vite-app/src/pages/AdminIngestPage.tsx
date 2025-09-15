@@ -6,6 +6,8 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/hooks/useToast'
+import { useVenueStats } from '@/hooks/useVenues'
+import { Building2, TrendingUp } from 'lucide-react'
 
 interface IngestResult {
   success: boolean
@@ -27,6 +29,7 @@ export function AdminIngestPage() {
   const [source, setSource] = useState('google')
   const [result, setResult] = useState<IngestResult | null>(null)
   const { toast } = useToast()
+  const { data: venueStats } = useVenueStats()
 
   const sources = [
     { id: 'google', name: 'Google Places', function: 'ingest_places_google' },
@@ -120,6 +123,69 @@ export function AdminIngestPage() {
             Manually trigger data ingestion from various sources for the current map bounds.
           </p>
         </div>
+
+        {/* Venue Statistics */}
+        {venueStats && (
+          <Card className="bg-gray-900 border-gray-800 p-6 mb-6">
+            <h2 className="text-xl font-semibold mb-4 flex items-center">
+              <Building2 className="w-5 h-5 mr-2" />
+              Venue Statistics
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-gray-800 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-blue-400">{venueStats.total}</div>
+                <div className="text-sm text-gray-400">Total Venues</div>
+              </div>
+              <div className="bg-gray-800 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-green-400">{venueStats.recentlyAdded}</div>
+                <div className="text-sm text-gray-400">Added Today</div>
+              </div>
+              <div className="bg-gray-800 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-purple-400">
+                  {venueStats.bySource.find(s => s.source === 'google_places')?.count || 0}
+                </div>
+                <div className="text-sm text-gray-400">Google Places</div>
+              </div>
+              <div className="bg-gray-800 p-4 rounded-lg">
+                <div className="text-2xl font-bold text-red-400">
+                  {venueStats.bySource.find(s => s.source === 'yelp')?.count || 0}
+                </div>
+                <div className="text-sm text-gray-400">Yelp Venues</div>
+              </div>
+            </div>
+
+            {venueStats.bySource.length > 0 && (
+              <div>
+                <h3 className="text-lg font-medium text-white mb-3 flex items-center">
+                  <TrendingUp className="w-4 h-4 mr-2" />
+                  Source Breakdown
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {venueStats.bySource.map(source => (
+                    <div key={source.source} className="flex items-center justify-between bg-gray-800 p-3 rounded">
+                      <div className="flex items-center space-x-2">
+                        {source.source === 'google_places' && (
+                          <Badge className="bg-blue-500">Google</Badge>
+                        )}
+                        {source.source === 'yelp' && (
+                          <Badge className="bg-red-500">Yelp</Badge>
+                        )}
+                        {source.source === 'manual' && (
+                          <Badge className="bg-gray-500">Manual</Badge>
+                        )}
+                        <span className="text-white text-sm capitalize">
+                          {source.source.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <span className="text-white font-bold">{source.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Card>
+        )}
 
         <Card className="bg-gray-900 border-gray-800 p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">Configuration</h2>
