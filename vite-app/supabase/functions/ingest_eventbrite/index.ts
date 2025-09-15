@@ -87,54 +87,79 @@ async function sleep(ms: number) {
 }
 
 async function fetchEventbriteEvents(location: string, page: number = 1, retryCount = 0): Promise<EventbriteEvent[]> {
-  const MAX_RETRIES = 3
-  const RETRY_DELAY = 1000
+  await checkRateLimit()
+  
+  const token = Deno.env.get('EVENTBRITE_PRIVATE_TOKEN')
+  if (!token) {
+    throw new Error('Eventbrite token not configured')
+  }
 
   try {
-    await checkRateLimit()
-    
-    const token = Deno.env.get('EVENTBRITE_TOKEN')
-    if (!token) {
-      throw new Error('EVENTBRITE_TOKEN environment variable is required')
-    }
-
-    const url = new URL('https://www.eventbriteapi.com/v3/events/search/')
-    url.searchParams.set('location.address', location)
-    url.searchParams.set('start_date.range_start', new Date().toISOString())
-    url.searchParams.set('expand', 'venue,ticket_availability,category')
-    url.searchParams.set('page', page.toString())
-    url.searchParams.set('sort_by', 'date')
-
-    const response = await fetch(url.toString(), {
+    // First, try to get user's organizations
+    const orgResponse = await fetch(`https://www.eventbriteapi.com/v3/users/me/organizations/`, {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       }
     })
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        // Rate limited - wait and retry
-        const retryAfter = response.headers.get('Retry-After')
-        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : RETRY_DELAY * Math.pow(2, retryCount)
-        
-        if (retryCount < MAX_RETRIES) {
-          console.log(`Rate limited. Waiting ${waitTime}ms before retry ${retryCount + 1}...`)
-          await sleep(waitTime)
-          return fetchEventbriteEvents(location, page, retryCount + 1)
-        }
-      }
-      
-      throw new Error(`Eventbrite API error: ${response.status} ${response.statusText}`)
+    if (!orgResponse.ok) {
+      throw new Error(`Organizations API error: ${orgResponse.status}`)
     }
 
-    const data = await response.json()
-    return data.events || []
+    const orgData = await orgResponse.json()
+    
+    if (!orgData.organizations || orgData.organizations.length === 0) {
+      // No organizations - try to get user's own events
+      const userResponse = await fetch(`https://www.eventbriteapi.com/v3/users/me/events/?status=live,started,ended`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!userResponse.ok) {
+        if (userResponse.status === 404) {
+          // User has no events, return empty array instead of throwing error
+          console.log('No events found for this Eventbrite account')
+          return []
+        }
+        throw new Error(`User events API error: ${userResponse.status}`)
+      }
+
+      const userData = await userResponse.json()
+      return userData.events || []
+    }
+
+    // Get events from all organizations
+    const allEvents: EventbriteEvent[] = []
+    
+    for (const org of orgData.organizations) {
+      try {
+        const eventsResponse = await fetch(`https://www.eventbriteapi.com/v3/organizations/${org.id}/events/?status=live,started,ended`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        })
+
+        if (eventsResponse.ok) {
+          const eventsData = await eventsResponse.json()
+          if (eventsData.events) {
+            allEvents.push(...eventsData.events)
+          }
+        }
+      } catch (orgError) {
+        console.error(`Error fetching events for org ${org.id}:`, orgError)
+      }
+    }
+
+    return allEvents
     
   } catch (error) {
-    if (retryCount < MAX_RETRIES) {
-      console.log(`Error fetching events. Retrying ${retryCount + 1}/${MAX_RETRIES}...`)
-      await sleep(RETRY_DELAY * Math.pow(2, retryCount))
+    if (retryCount < 3) {
+      console.log(`Retrying Eventbrite request (${retryCount + 1}/3)...`)
+      await sleep(1000 * (retryCount + 1))
       return fetchEventbriteEvents(location, page, retryCount + 1)
     }
     
@@ -227,12 +252,12 @@ serve(async (req) => {
   }
 
   // Check for API token
-  const token = Deno.env.get('EVENTBRITE_TOKEN')
+  const token = Deno.env.get('EVENTBRITE_PRIVATE_TOKEN')
   if (!token) {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        message: 'disabled: missing EVENTBRITE_TOKEN' 
+        message: 'disabled: missing EVENTBRITE_PRIVATE_TOKEN' 
       }),
       { 
         status: 200,
@@ -265,8 +290,9 @@ serve(async (req) => {
       jobId = jobData
     }
 
-    const { cities } = await req.json()
-    const targetCities = cities || ['San Francisco', 'New York', 'Los Angeles', 'Chicago']
+    const requestBody = await req.json()
+    // Handle both old parameter format (lat/lng) and new cities format for backward compatibility
+    const targetCities = requestBody.cities || ['San Francisco', 'New York', 'Los Angeles', 'Chicago']
     const startTime = Date.now()
 
     let totalProcessed = 0
@@ -354,7 +380,50 @@ serve(async (req) => {
   } catch (error) {
     console.error('Ingestion error:', error)
     
-    // Mark job as failed
+    // Check if this is the expected deprecation error
+    if (error.message.includes('deprecated')) {
+      // Mark job as completed with note about deprecation
+      if (jobId) {
+        try {
+          const supabase = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+          )
+          
+          await supabase.rpc('complete_job_run', {
+            p_job_id: jobId,
+            p_status: 'completed',
+            p_records_processed: 0,
+            p_records_inserted: 0,
+            p_records_updated: 0,
+            p_records_skipped: 0,
+            p_errors_count: 0,
+            p_error_details: 'API deprecated - no longer supported'
+          })
+        } catch (jobError) {
+          console.error('Failed to update job status:', jobError)
+        }
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          status: 'disabled',
+          reason: 'Eventbrite public search API has been deprecated by Eventbrite. Only organization/venue-specific events are accessible.',
+          processed: 0,
+          inserted: 0,
+          skipped: 0,
+          errors: 0,
+          jobId 
+        }),
+        { 
+          status: 200, 
+          headers: { 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+    
+    // For other errors, mark job as failed
     if (jobId) {
       try {
         const supabase = createClient(
