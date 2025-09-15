@@ -57,6 +57,48 @@ SceneScout is a comprehensive event discovery and planning platform built with N
 
 Visit [http://localhost:3000](http://localhost:3000)
 
+## 🔐 API Key Security
+
+### Important: Never commit API keys to the repository!
+
+SceneScout uses multiple external APIs. All API keys should be stored securely:
+
+1. **For local development**: Store keys in `.env` files (already in .gitignore)
+2. **For production**: Use Supabase Secrets for edge functions
+3. **For Vercel deployment**: Use Vercel environment variables
+
+### Google Maps API Security
+
+The application uses Google Places API **only server-side** in Supabase edge functions:
+- Frontend uses Leaflet/OpenStreetMap (no Google Maps API key needed)
+- Google Places API key should be set as a Supabase secret:
+  ```bash
+  supabase secrets set GOOGLE_PLACES_API_KEY=YOUR_API_KEY
+  ```
+
+### Setting up API Keys
+
+1. **Supabase Edge Functions** (for Google Places, Yelp):
+   ```bash
+   cd vite-app
+   supabase secrets set GOOGLE_PLACES_API_KEY=YOUR_GOOGLE_PLACES_API_KEY
+   supabase secrets set YELP_API_KEY=YOUR_YELP_API_KEY
+   ```
+
+2. **Local Development** (.env file):
+   ```env
+   # Copy from .env.example and fill in your keys
+   GOOGLE_PLACES_API_KEY=YOUR_API_KEY
+   YELP_API_KEY=YOUR_API_KEY
+   ```
+
+### API Key Best Practices
+
+- **Restrict API keys** in Google Cloud Console to specific APIs and domains
+- **Rotate keys regularly** if exposed
+- **Monitor usage** through cloud provider dashboards
+- **Never expose keys** in client-side code or public repositories
+
 ## 🏗 Architecture
 
 ### Frontend

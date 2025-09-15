@@ -42,8 +42,8 @@
 cd vite-app
 
 # Set API secrets
-supabase secrets set GOOGLE_PLACES_API_KEY=AIzaSyCrsauxxAb2nqLsfhr4UqSeJIFkssLHjNE
-supabase secrets set YELP_API_KEY=tpNEPYv1OdDlphvD--672xPJKCr3KGFNLsJ5Q1Hbq12xA0suztjs8dYxFr_sUGD8a5Pp2fPej32Xeh0uvxh6wYvF2tgAoedhXJ2fNqnrpq4Rme_m6bTptrxuJajHaHYx
+supabase secrets set GOOGLE_PLACES_API_KEY=YOUR_GOOGLE_PLACES_API_KEY
+supabase secrets set YELP_API_KEY=YOUR_YELP_API_KEY
 
 # Deploy functions  
 supabase functions deploy ingest_places_google --no-verify-jwt --schedule "10 */6 * * *"
