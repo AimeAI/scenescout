@@ -33,6 +33,8 @@ interface Event {
   is_free?: boolean
   category: string
   source?: string | null
+  external_url?: string | null
+  url?: string | null
   venue?: {
     id: string
     name: string
@@ -247,8 +249,20 @@ export function EventCard({
               {formatPrice(event.price_min ?? undefined, event.price_max ?? undefined, event.is_free)}
             </span>
             
-            <Button size="sm" className="bg-purple-600 hover:bg-purple-700">
-              View Details
+            <Button 
+              size="sm" 
+              className="bg-purple-600 hover:bg-purple-700"
+              onClick={(e) => {
+                e.stopPropagation()
+                const ticketUrl = event.external_url || event.url
+                if (ticketUrl) {
+                  window.open(ticketUrl, '_blank', 'noopener,noreferrer')
+                } else if (onClick) {
+                  onClick()
+                }
+              }}
+            >
+              {event.external_url || event.url ? 'Get Tickets' : 'View Details'}
             </Button>
           </div>
         </div>

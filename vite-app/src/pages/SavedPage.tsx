@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Heart, Calendar, MapPin, Share2, Trash2, Search } from 'lucide-react'
 import { useSavedEvents } from '@/hooks/useEvents'
 import { useAuthStore } from '@/stores/auth'
@@ -19,6 +20,7 @@ const sortOptions = [
 ]
 
 export function SavedPage() {
+  const navigate = useNavigate()
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('saved_date')
@@ -225,6 +227,7 @@ export function SavedPage() {
                       className={cn(
                         selectedEvents.includes(event.id) && "ring-2 ring-purple-500"
                       )}
+                      onClick={() => navigate(`/event/${event.id}`)}
                     />
                     <button
                       onClick={() => toggleEventSelection(event.id)}
@@ -298,10 +301,24 @@ export function SavedPage() {
                         </div>
 
                         <div className="flex space-x-2">
-                          <Button size="sm" variant="outline" className="border-white/30 text-white hover:bg-white/10">
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="border-white/30 text-white hover:bg-white/10"
+                            onClick={() => navigate(`/event/${event.id}`)}
+                          >
                             View Details
                           </Button>
-                          <Button size="sm" className="bg-purple-600 hover:bg-purple-700">
+                          <Button 
+                            size="sm" 
+                            className="bg-purple-600 hover:bg-purple-700"
+                            onClick={() => {
+                              const ticketUrl = event.external_url || event.url
+                              if (ticketUrl) {
+                                window.open(ticketUrl, '_blank', 'noopener,noreferrer')
+                              }
+                            }}
+                          >
                             Get Tickets
                           </Button>
                         </div>

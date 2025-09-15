@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import { useLocationCategoryEvents } from '@/hooks/useLocationEvents'
 import { EventCard } from '@/components/events/EventCard'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
@@ -10,6 +11,7 @@ interface CategoryRowProps {
 }
 
 export function CategoryRow({ category, title, icon }: CategoryRowProps) {
+  const navigate = useNavigate()
   const { data: events, isLoading, error } = useLocationCategoryEvents(category, 10)
 
   if (error) {
@@ -45,6 +47,7 @@ export function CategoryRow({ category, title, icon }: CategoryRowProps) {
               key={event.id}
               event={event}
               className="flex-shrink-0 w-80"
+              onClick={() => navigate(`/event/${event.id}`)}
             />
           ))}
         </div>

@@ -189,7 +189,7 @@ export const plansService = {
         )
       `)
       .eq('is_public', true)
-      .eq('status', 'active')
+      .is('deleted_at', null)
       .order('updated_at', { ascending: false })
       .limit(limit)
 

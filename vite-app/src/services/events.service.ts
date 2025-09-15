@@ -25,87 +25,66 @@ export interface EventFilters {
 export const eventsService = {
   // Get all events with filters
   async getEvents(filters: EventFilters = {}) {
-    try {
-      let query = supabase
-        .from('events')
-        .select(`
-          *,
-          venue:venues(id, name, address, latitude, longitude),
-          city:cities(id, name, slug)
-        `)
-        .gte('date', new Date().toISOString().split('T')[0])
-        .order('date', { ascending: true })
+    let query = supabase
+      .from('events')
+      .select(`
+        *,
+        venue:venues(id, name, address, latitude, longitude, venue_type),
+        city:cities(id, name, slug)
+      `)
+      .gte('date', new Date().toISOString().split('T')[0])
+      .order('date', { ascending: true })
 
-      // Apply filters
-      if (filters.categories?.length) {
-        query = query.in('category', filters.categories)
-      }
-
-      if (filters.city) {
-        query = query.eq('city_id', filters.city)
-      }
-
-      if (filters.dateFrom) {
-        query = query.gte('date', filters.dateFrom)
-      }
-
-      if (filters.dateTo) {
-        query = query.lte('date', filters.dateTo)
-      }
-
-      if (filters.isFree) {
-        query = query.eq('is_free', true)
-      } else {
-        if (filters.priceMin !== undefined) {
-          query = query.gte('price_min', filters.priceMin)
-        }
-        if (filters.priceMax !== undefined) {
-          query = query.lte('price_max', filters.priceMax)
-        }
-      }
-
-      if (filters.search) {
-        query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`)
-      }
-
-      // Pagination
-      const limit = filters.limit || 50
-      const offset = filters.offset || 0
-      query = query.range(offset, offset + limit - 1)
-
-      const { data, error } = await query
-
-      if (error) throw error
-      return data
-    } catch (err) {
-      console.warn('getEvents failed, using mock data')
-      
-      // Filter mock data based on provided filters
-      let filteredEvents = [...mockEvents]
-      
-      if (filters.categories?.length) {
-        filteredEvents = filteredEvents.filter(event => 
-          filters.categories!.includes(event.category as EventCategory)
-        )
-      }
-      
-      if (filters.isFree !== undefined) {
-        filteredEvents = filteredEvents.filter(event => event.is_free === filters.isFree)
-      }
-      
-      if (filters.search) {
-        const searchLower = filters.search.toLowerCase()
-        filteredEvents = filteredEvents.filter(event =>
-          event.title.toLowerCase().includes(searchLower) ||
-          event.description?.toLowerCase().includes(searchLower)
-        )
-      }
-      
-      // Apply limit and offset
-      const limit = filters.limit || 50
-      const offset = filters.offset || 0
-      return filteredEvents.slice(offset, offset + limit)
+    // Apply filters
+    if (filters.categories?.length) {
+      query = query.in('category', filters.categories)
     }
+
+    if (filters.city) {
+      query = query.eq('city_id', filters.city)
+    }
+
+    if (filters.dateFrom) {
+      query = query.gte('date', filters.dateFrom)
+    }
+
+    if (filters.dateTo) {
+      query = query.lte('date', filters.dateTo)
+    }
+
+    if (filters.isFree) {
+      query = query.eq('is_free', true)
+    } else {
+      if (filters.priceMin !== undefined) {
+        query = query.gte('price_min', filters.priceMin)
+      }
+      if (filters.priceMax !== undefined) {
+        query = query.lte('price_max', filters.priceMax)
+      }
+    }
+
+    if (filters.search) {
+      query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`)
+    }
+
+    // Apply status filter (commented out since status column doesn't exist)
+    // if (filters.status) {
+    //   query = query.eq('status', filters.status)
+    // }
+
+    // Pagination
+    const limit = filters.limit || 50
+    const offset = filters.offset || 0
+    query = query.range(offset, offset + limit - 1)
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('Error fetching events:', error)
+      throw error
+    }
+
+    return data || []
   },
 
   // Get featured events

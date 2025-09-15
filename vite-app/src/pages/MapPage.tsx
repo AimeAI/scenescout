@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet'
 import { LatLngExpression } from 'leaflet'
 import { Search, Filter, Grid, List, MapPin, Building2 } from 'lucide-react'
@@ -6,6 +7,7 @@ import { useLocalEvents } from '@/hooks/useLocationEvents'
 import { useNearbyVenues } from '@/hooks/useVenues'
 import { useBackgroundIngestion } from '@/hooks/useBackgroundIngestion'
 import { apiIngestionService } from '@/services/api-ingestion.service'
+import { eventIngestionService } from '@/services/event-ingestion.service'
 import { locationService } from '@/services/location.service'
 import { EventCard } from '@/components/events/EventCard'
 import { VenueCard } from '@/components/venues/VenueCard'
@@ -64,12 +66,22 @@ function MapEventHandler() {
         map.distance([center.lat, center.lng], [center.lat, ne.lng])
       )
       
-      // Trigger real-time venue ingestion for the new area
+      // Trigger real-time venue and event ingestion for the new area
       try {
+        // Ingest venues
         await apiIngestionService.ingestNearbyVenues({
           lat: center.lat,
           lng: center.lng,
           radius: Math.min(radius, 3000) // Max 3km radius
+        })
+        
+        // Ingest events
+        await eventIngestionService.ingestNearbyEvents({
+          lat: center.lat,
+          lng: center.lng,
+          radius: Math.round(radius / 1609.34), // Convert to miles
+          city: 'San Francisco', // You might want to get this dynamically
+          stateCode: 'CA'
         })
       } catch (error) {
         console.error('Background ingestion failed:', error)
@@ -99,6 +111,7 @@ interface MapEvent {
 }
 
 export function MapPage() {
+  const navigate = useNavigate()
   const [viewMode, setViewMode] = useState<'split' | 'map' | 'list'>('split')
   const [contentType, setContentType] = useState<'events' | 'venues' | 'both'>('both')
   const [searchQuery, setSearchQuery] = useState('')
@@ -109,7 +122,7 @@ export function MapPage() {
   const [filters, setFilters] = useState<EventFilters>({})
   const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null)
   
-  // Get location-based events within 50km
+  // Get location-based events within 50km  
   const { data: events = [], isLoading: eventsLoading, error: eventsError } = useLocalEvents(50)
   
   // Get nearby venues within 10km
@@ -206,7 +219,7 @@ export function MapPage() {
                 )}
                 <Button 
                   size="sm" 
-                  onClick={() => setSelectedEvent(event)}
+                  onClick={() => navigate(`/event/${event.id}`)}
                   className="w-full"
                 >
                   View Details
@@ -519,8 +532,18 @@ export function MapPage() {
                 )}
 
                 <div className="flex space-x-4 pt-4">
-                  <Button className="bg-purple-600 hover:bg-purple-700">
-                    Get Tickets
+                  <Button 
+                    className="bg-purple-600 hover:bg-purple-700"
+                    onClick={() => {
+                      const ticketUrl = selectedEvent.external_url || selectedEvent.url
+                      if (ticketUrl) {
+                        window.open(ticketUrl, '_blank', 'noopener,noreferrer')
+                      } else {
+                        navigate(`/event/${selectedEvent.id}`)
+                      }
+                    }}
+                  >
+                    {selectedEvent.external_url || selectedEvent.url ? 'Get Tickets' : 'View Details'}
                   </Button>
                   <Button variant="outline" className="border-white/30 text-white hover:bg-white/10">
                     Save Event

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Search, Filter, Sparkles, TrendingUp, Calendar, MapPin } from 'lucide-react'
 import { useLocalEvents } from '@/hooks/useLocationEvents'
 import { locationService } from '@/services/location.service'
@@ -32,6 +33,7 @@ const sortOptions = [
 ]
 
 export function DiscoverPage() {
+  const navigate = useNavigate()
   const [selectedCategory, setSelectedCategory] = useState<EventCategoryWithAll>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('relevance')
@@ -242,6 +244,7 @@ export function DiscoverPage() {
                   key={event.id}
                   event={event}
                   size="small"
+                  onClick={() => navigate(`/event/${event.id}`)}
                 />
               ))}
             </div>

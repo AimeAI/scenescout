@@ -422,7 +422,8 @@ serve(async (req) => {
           price_min: event.priceRanges?.[0]?.min || null,
           price_max: event.priceRanges?.[0]?.max || null,
           price_currency: event.priceRanges?.[0]?.currency || 'USD',
-          ticket_url: event.url,
+          external_url: event.url,
+          url: event.url,
           image_url: event.images?.find(img => img.ratio === '16_9')?.url || 
                      event.images?.[0]?.url || null,
           source: 'ticketmaster',
