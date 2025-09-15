@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Heart, Calendar, MapPin, Share2, Trash2, Filter, Search } from 'lucide-react'
+import { Heart, Calendar, MapPin, Share2, Trash2, Search } from 'lucide-react'
 import { useSavedEvents } from '@/hooks/useEvents'
+import { useAuthStore } from '@/stores/auth'
 import { EventCard } from '@/components/events/EventCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,8 +23,9 @@ export function SavedPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('saved_date')
   const [selectedEvents, setSelectedEvents] = useState<string[]>([])
-
-  const { data: savedEvents = [], isLoading, error } = useSavedEvents()
+  
+  const { user } = useAuthStore()
+  const { data: savedEvents = [], isLoading, error } = useSavedEvents(user?.id || '')
 
   // Filter and sort events
   const filteredEvents = savedEvents

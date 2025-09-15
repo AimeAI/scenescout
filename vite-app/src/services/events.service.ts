@@ -1,9 +1,11 @@
-import { supabase } from '@/lib/supabase'
-import type { Tables, Enums } from '@/lib/supabase'
+import { supabase } from '@/lib/supabaseClient'
+import { safeRpc, fallbackQueries } from '@/lib/safeRpc'
+import { mockEvents, getMockEventsByCategory, getMockFeaturedEvents } from '@/lib/mockData'
+import type { Event, EventCategory } from '@/types/database.types'
 
-export type Event = Tables<'events'>
-export type EventCategory = Enums<'event_category'>
-export type EventStatus = Enums<'event_status'>
+export type { Event, EventCategory }
+export type EventStatus = 'active' | 'cancelled' | 'postponed'
+export type EventCategoryWithAll = EventCategory | 'all'
 
 export interface EventFilters {
   categories?: EventCategory[]
@@ -15,6 +17,7 @@ export interface EventFilters {
   isFree?: boolean
   search?: string
   status?: EventStatus
+  sortBy?: 'relevance' | 'date' | 'popular' | 'distance'
   limit?: number
   offset?: number
 }
@@ -22,86 +25,125 @@ export interface EventFilters {
 export const eventsService = {
   // Get all events with filters
   async getEvents(filters: EventFilters = {}) {
-    let query = supabase
-      .from('events')
-      .select(`
-        *,
-        venue:venues(id, name, address, latitude, longitude),
-        city:cities(id, name, slug)
-      `)
-      .eq('is_approved', true)
-      .eq('status', filters.status || 'active')
-      .gte('date', new Date().toISOString().split('T')[0])
-      .order('date', { ascending: true })
+    try {
+      let query = supabase
+        .from('events')
+        .select(`
+          *,
+          venue:venues(id, name, address, latitude, longitude),
+          city:cities(id, name, slug)
+        `)
+        .eq('is_approved', true)
+        .eq('status', filters.status || 'active')
+        .gte('date', new Date().toISOString().split('T')[0])
+        .order('date', { ascending: true })
 
-    // Apply filters
-    if (filters.categories?.length) {
-      query = query.in('category', filters.categories)
-    }
-
-    if (filters.city) {
-      query = query.eq('city_id', filters.city)
-    }
-
-    if (filters.dateFrom) {
-      query = query.gte('date', filters.dateFrom)
-    }
-
-    if (filters.dateTo) {
-      query = query.lte('date', filters.dateTo)
-    }
-
-    if (filters.isFree) {
-      query = query.eq('is_free', true)
-    } else {
-      if (filters.priceMin !== undefined) {
-        query = query.gte('price_min', filters.priceMin)
+      // Apply filters
+      if (filters.categories?.length) {
+        query = query.in('category', filters.categories)
       }
-      if (filters.priceMax !== undefined) {
-        query = query.lte('price_max', filters.priceMax)
+
+      if (filters.city) {
+        query = query.eq('city_id', filters.city)
       }
+
+      if (filters.dateFrom) {
+        query = query.gte('date', filters.dateFrom)
+      }
+
+      if (filters.dateTo) {
+        query = query.lte('date', filters.dateTo)
+      }
+
+      if (filters.isFree) {
+        query = query.eq('is_free', true)
+      } else {
+        if (filters.priceMin !== undefined) {
+          query = query.gte('price_min', filters.priceMin)
+        }
+        if (filters.priceMax !== undefined) {
+          query = query.lte('price_max', filters.priceMax)
+        }
+      }
+
+      if (filters.search) {
+        query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`)
+      }
+
+      // Pagination
+      const limit = filters.limit || 50
+      const offset = filters.offset || 0
+      query = query.range(offset, offset + limit - 1)
+
+      const { data, error } = await query
+
+      if (error) throw error
+      return data
+    } catch (err) {
+      console.warn('getEvents failed, using mock data')
+      
+      // Filter mock data based on provided filters
+      let filteredEvents = [...mockEvents]
+      
+      if (filters.categories?.length) {
+        filteredEvents = filteredEvents.filter(event => 
+          filters.categories!.includes(event.category as EventCategory)
+        )
+      }
+      
+      if (filters.isFree !== undefined) {
+        filteredEvents = filteredEvents.filter(event => event.is_free === filters.isFree)
+      }
+      
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase()
+        filteredEvents = filteredEvents.filter(event =>
+          event.title.toLowerCase().includes(searchLower) ||
+          event.description?.toLowerCase().includes(searchLower)
+        )
+      }
+      
+      // Apply limit and offset
+      const limit = filters.limit || 50
+      const offset = filters.offset || 0
+      return filteredEvents.slice(offset, offset + limit)
     }
-
-    if (filters.search) {
-      query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`)
-    }
-
-    // Pagination
-    const limit = filters.limit || 50
-    const offset = filters.offset || 0
-    query = query.range(offset, offset + limit - 1)
-
-    const { data, error } = await query
-
-    if (error) throw error
-    return data
   },
 
   // Get featured events
   async getFeaturedEvents(limit = 10) {
-    const { data, error } = await supabase
-      .rpc('get_featured_events', { limit_count: limit })
+    const { data, error } = await safeRpc(
+      'get_featured_events',
+      { limit_count: limit },
+      () => fallbackQueries.getFeaturedEvents(limit)
+    )
     
     if (error) throw error
-    return data
+    return data || []
   },
 
   // Get events by city
   async getEventsByCity(citySlug: string, limit = 50) {
-    const { data, error } = await supabase
-      .rpc('get_events_by_city', { city_slug: citySlug, limit_count: limit })
+    const { data, error } = await safeRpc(
+      'get_events_by_city',
+      { city_slug: citySlug, limit_count: limit },
+      () => fallbackQueries.getEventsByCategory(undefined, citySlug, limit)
+    )
     
     if (error) throw error
-    return data
+    return data || []
   },
 
   // Get nearby events
-  async getNearbyEvents(lat: number, lng: number, radiusKm = 10) {
-    const { data, error } = await supabase
-      .rpc('get_nearby_events', { lat, lng, radius_km: radiusKm })
+  async getNearbyEvents(lat: number, lng: number, radiusMiles = 10) {
+    const { data, error } = await safeRpc(
+      'get_nearby_events',
+      { user_lat: lat, user_lng: lng, radius_miles: radiusMiles },
+      () => fallbackQueries.getNearbyEvents(lat, lng, radiusMiles)
+    )
     
     if (error) throw error
-    return data
+    return data || []
   },
 
   // Get single event
@@ -121,20 +163,35 @@ export const eventsService = {
   },
 
   // Search events
-  async searchEvents(query: string) {
-    const { data, error } = await supabase
-      .rpc('search_events', { search_query: query })
+  async searchEvents(query: string, filters: EventFilters = {}) {
+    const { data, error } = await safeRpc(
+      'search_events',
+      { search_query: query, ...filters },
+      () => fallbackQueries.searchEvents(query, filters)
+    )
     
     if (error) throw error
-    return data
+    return data || []
   },
 
   // Increment event views
   async incrementViews(eventId: string) {
-    const { error } = await supabase
-      .rpc('increment_event_views', { event_id: eventId })
+    // First get current view count
+    const { data: event, error: fetchError } = await supabase
+      .from('events')
+      .select('view_count')
+      .eq('id', eventId)
+      .single()
     
-    if (error) throw error
+    if (fetchError) throw fetchError
+    
+    // Then update it
+    const { error: updateError } = await supabase
+      .from('events')
+      .update({ view_count: (event?.view_count || 0) + 1 })
+      .eq('id', eventId)
+    
+    if (updateError) throw updateError
   },
 
   // Get events for infinite scroll

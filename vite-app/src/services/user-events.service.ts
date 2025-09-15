@@ -1,14 +1,13 @@
-import { supabase } from '@/lib/supabase'
-import type { Tables, Enums } from '@/lib/supabase'
+import { supabase } from '@/lib/supabaseClient'
+import type { UserEvent, UserEventType } from '@/types/database.types'
 
-export type UserEvent = Tables<'user_events'>
-export type UserEventType = Enums<'user_event_type'>
+export type { UserEvent, UserEventType }
 
 export const userEventsService = {
   // Get user's saved events
   async getSavedEvents(userId: string) {
     const { data, error } = await supabase
-      .rpc('get_user_saved_events', { user_id: userId })
+      .rpc('get_user_saved_events', { p_user_id: userId })
     
     if (error) throw error
     return data

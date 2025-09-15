@@ -281,8 +281,12 @@ serve(async (req) => {
     const apiKey = Deno.env.get('YELP_API_KEY');
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: 'Yelp API key not configured' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({ 
+          status: 'disabled', 
+          reason: 'missing YELP_API_KEY',
+          success: false 
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
     }
 

@@ -1,23 +1,26 @@
-import { useState, useMemo } from 'react'
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import { useState, useMemo, useEffect } from 'react'
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet'
 import { LatLngExpression } from 'leaflet'
 import { Search, Filter, Grid, List, MapPin } from 'lucide-react'
-import { useEvents } from '@/hooks/useEvents'
+import { useLocalEvents } from '@/hooks/useLocationEvents'
+import { useBackgroundIngestion } from '@/hooks/useBackgroundIngestion'
+import { locationService } from '@/services/location.service'
 import { EventCard } from '@/components/events/EventCard'
+import { EventFiltersModal } from '@/components/filters/EventFiltersModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import type { EventFilters } from '@/services/events.service'
 import 'leaflet/dist/leaflet.css'
 
 // Fix for default markers in react-leaflet
 import L from 'leaflet'
-import markerIcon from 'leaflet/dist/images/marker-icon.png'
-import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 
 const DefaultIcon = L.icon({
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
+  iconUrl: '/leaflet/images/marker-icon.png',
+  shadowUrl: '/leaflet/images/marker-shadow.png',
   iconSize: [25, 41],
   iconAnchor: [12, 41],
   popupAnchor: [1, -34],
@@ -26,20 +29,45 @@ const DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon
 
-interface Event {
+// Component to handle map events
+function MapEventHandler() {
+  const { debouncedIngestForLocation } = useBackgroundIngestion()
+  
+  useMapEvents({
+    moveend: (e) => {
+      const map = e.target
+      const center = map.getCenter()
+      const bounds = map.getBounds()
+      
+      // Calculate radius from bounds (rough approximation)
+      const ne = bounds.getNorthEast()
+      const radius = Math.min(
+        map.distance([center.lat, center.lng], [ne.lat, center.lng]),
+        map.distance([center.lat, center.lng], [center.lat, ne.lng])
+      )
+      
+      // Trigger background ingestion for the new area
+      debouncedIngestForLocation(center.lat, center.lng, Math.min(radius, 5000))
+    }
+  })
+  
+  return null
+}
+
+interface MapEvent {
   id: string
   title: string
-  description: string
+  description: string | null
   date: string
-  time?: string
-  venue_name?: string
-  venue_address?: string
-  latitude?: number
-  longitude?: number
-  image_url?: string
-  video_url?: string
-  price_min?: number
-  price_max?: number
+  time?: string | null
+  venue_name?: string | null
+  venue_address?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  image_url?: string | null
+  video_url?: string | null
+  price_min?: number | null
+  price_max?: number | null
   is_free?: boolean
   category: string
 }
@@ -47,10 +75,23 @@ interface Event {
 export function MapPage() {
   const [viewMode, setViewMode] = useState<'split' | 'map' | 'list'>('split')
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
-  const [mapCenter, setMapCenter] = useState<LatLngExpression>([37.7749, -122.4194]) // San Francisco
+  const [selectedEvent, setSelectedEvent] = useState<MapEvent | null>(null)
+  const [mapCenter, setMapCenter] = useState<LatLngExpression>([43.6532, -79.3832]) // Toronto default
+  const [showFilters, setShowFilters] = useState(false)
+  const [filters, setFilters] = useState<EventFilters>({})
   
-  const { data: events = [], isLoading, error } = useEvents({ limit: 50 })
+  // Get location-based events within 50km
+  const { data: events = [], isLoading, error } = useLocalEvents(50)
+  
+  // Set map center to user location when available
+  useEffect(() => {
+    locationService.getCurrentLocation().then((location) => {
+      setMapCenter([location.latitude, location.longitude])
+    }).catch(() => {
+      // Keep default center if location fails
+      setMapCenter([43.6532, -79.3832])
+    })
+  }, [])
 
   // Filter events with location data
   const eventsWithLocation = useMemo(() => {
@@ -60,7 +101,7 @@ export function MapPage() {
       (!searchQuery || 
         event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         event.venue_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        event.description.toLowerCase().includes(searchQuery.toLowerCase())
+        event.description?.toLowerCase().includes(searchQuery.toLowerCase())
       )
     )
   }, [events, searchQuery])
@@ -88,6 +129,7 @@ export function MapPage() {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+        <MapEventHandler />
         {eventsWithLocation.map((event) => (
           <Marker
             key={event.id}
@@ -166,9 +208,19 @@ export function MapPage() {
               />
             </div>
             
-            <Button variant="ghost" size="sm" className="text-white/60 hover:text-white">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setShowFilters(true)}
+              className="text-white/60 hover:text-white"
+            >
               <Filter size={16} className="mr-2" />
               Filters
+              {Object.keys(filters).length > 0 && (
+                <Badge className="ml-2 bg-purple-600">
+                  {Object.keys(filters).length}
+                </Badge>
+              )}
             </Button>
           </div>
 
@@ -298,6 +350,14 @@ export function MapPage() {
           </div>
         </div>
       )}
+
+      {/* Filters Modal */}
+      <EventFiltersModal
+        isOpen={showFilters}
+        onClose={() => setShowFilters(false)}
+        onApply={setFilters}
+        currentFilters={filters}
+      />
     </div>
   )
 }

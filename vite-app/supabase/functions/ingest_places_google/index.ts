@@ -267,8 +267,12 @@ serve(async (req) => {
     const apiKey = Deno.env.get('GOOGLE_PLACES_API_KEY');
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: 'Google Places API key not configured' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({ 
+          status: 'disabled', 
+          reason: 'missing GOOGLE_PLACES_API_KEY',
+          success: false 
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
     }
 

@@ -7,14 +7,14 @@ import { cn } from '@/lib/utils'
 interface Event {
   id: string
   title: string
-  description: string
+  description: string | null
   date: string
-  time?: string
-  venue_name?: string
-  image_url?: string
-  video_url?: string
-  price_min?: number
-  price_max?: number
+  time?: string | null
+  venue_name?: string | null
+  image_url?: string | null
+  video_url?: string | null
+  price_min?: number | null
+  price_max?: number | null
   is_free?: boolean
   category: string
 }
@@ -91,9 +91,11 @@ export function FeaturedBanner({ events }: FeaturedBannerProps) {
             </h1>
 
             {/* Description */}
-            <p className="text-xl text-white/90 mb-8 leading-relaxed">
-              {currentEvent.description}
-            </p>
+            {currentEvent.description && (
+              <p className="text-xl text-white/90 mb-8 leading-relaxed">
+                {currentEvent.description}
+              </p>
+            )}
 
             {/* Event Details */}
             <div className="flex flex-wrap items-center gap-6 text-white/90 text-lg mb-8">
@@ -135,7 +137,7 @@ export function FeaturedBanner({ events }: FeaturedBannerProps) {
               </Button>
               
               <div className="text-white/80">
-                {formatPrice(currentEvent.price_min, currentEvent.price_max, currentEvent.is_free)}
+                {formatPrice(currentEvent.price_min ?? undefined, currentEvent.price_max ?? undefined, currentEvent.is_free)}
               </div>
             </div>
           </div>

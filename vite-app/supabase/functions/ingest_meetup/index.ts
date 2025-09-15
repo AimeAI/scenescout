@@ -243,8 +243,12 @@ serve(async (req) => {
     const accessToken = Deno.env.get('MEETUP_ACCESS_TOKEN');
     if (!accessToken) {
       return new Response(
-        JSON.stringify({ error: 'Meetup access token not configured' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({ 
+          status: 'disabled', 
+          reason: 'missing MEETUP_ACCESS_TOKEN',
+          success: false 
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
     }
 

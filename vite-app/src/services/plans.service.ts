@@ -1,8 +1,7 @@
-import { supabase } from '@/lib/supabase'
-import type { Tables } from '@/lib/supabase'
+import { supabase } from '@/lib/supabaseClient'
+import type { Plan, PlanEvent } from '@/types/database.types'
 
-export type Plan = Tables<'plans'>
-export type PlanEvent = Tables<'plan_events'>
+export type { Plan, PlanEvent }
 
 interface CreatePlanData {
   title: string
@@ -54,7 +53,17 @@ export const plansService = {
   // Get plan details
   async getPlan(planId: string) {
     const { data, error } = await supabase
-      .rpc('get_plan_details', { plan_id: planId })
+      .from('plans')
+      .select(`
+        *,
+        city:cities(*),
+        plan_events(
+          *,
+          event:events(*)
+        )
+      `)
+      .eq('id', planId)
+      .single()
     
     if (error) throw error
     return data
@@ -68,14 +77,11 @@ export const plansService = {
     const { data, error } = await supabase
       .from('plans')
       .insert({
+        user_id: user.id,
         title: planData.title,
         description: planData.description,
         city_id: planData.cityId,
-        cover_image_url: planData.coverImageUrl,
         is_public: planData.isPublic || false,
-        tags: planData.tags,
-        notes: planData.notes,
-        created_by: user.id,
         status: 'draft'
       })
       .select()

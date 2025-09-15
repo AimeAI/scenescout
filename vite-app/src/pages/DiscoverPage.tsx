@@ -1,14 +1,17 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Search, Filter, Sparkles, TrendingUp, Calendar, MapPin } from 'lucide-react'
-import { useEvents, useInfiniteEvents } from '@/hooks/useEvents'
+import { useLocalEvents } from '@/hooks/useLocationEvents'
+import { locationService } from '@/services/location.service'
 import { EventCard } from '@/components/events/EventCard'
+import { EventFiltersModal } from '@/components/filters/EventFiltersModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import type { EventCategory } from '@/services/events.service'
+import type { EventCategoryWithAll, EventFilters } from '@/services/events.service'
 
-const categories: { id: EventCategory; label: string; icon: string }[] = [
+const categories: { id: EventCategoryWithAll; label: string; icon: string }[] = [
   { id: 'all', label: 'All Events', icon: '🎉' },
   { id: 'music', label: 'Music', icon: '🎵' },
   { id: 'sports', label: 'Sports', icon: '⚽' },
@@ -29,25 +32,82 @@ const sortOptions = [
 ]
 
 export function DiscoverPage() {
-  const [selectedCategory, setSelectedCategory] = useState<EventCategory>('all')
+  const [selectedCategory, setSelectedCategory] = useState<EventCategoryWithAll>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('relevance')
   const [showFilters, setShowFilters] = useState(false)
+  const [filters, setFilters] = useState<EventFilters>({})
+  const [userLocation, setUserLocation] = useState<string>('')
 
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-    error
-  } = useInfiniteEvents({
-    categories: selectedCategory === 'all' ? undefined : [selectedCategory],
-    search: searchQuery || undefined,
-    sortBy: sortBy as any
+  // Get location-based events
+  const { data: allEvents = [], isLoading, error } = useLocalEvents(100) // 100km radius for discover
+
+  // Get user location for display
+  useEffect(() => {
+    locationService.getCurrentLocation().then((location) => {
+      setUserLocation(location.city ? `${location.city}, ${location.state}` : 'Your Location')
+    }).catch(() => {
+      setUserLocation('Toronto, ON')
+    })
+  }, [])
+
+  // Filter and sort events based on criteria
+  const events = allEvents.filter(event => {
+    // Category filter
+    if (selectedCategory !== 'all' && event.category !== selectedCategory) {
+      return false
+    }
+    
+    // Search filter
+    if (searchQuery && !event.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
+        !event.description?.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false
+    }
+    
+    // Additional filters from modal
+    if (filters.categories?.length && !filters.categories.includes(event.category as any)) {
+      return false
+    }
+    
+    if (filters.dateFrom && event.date < filters.dateFrom) {
+      return false
+    }
+    
+    if (filters.dateTo && event.date > filters.dateTo) {
+      return false
+    }
+    
+    if (filters.isFree && !event.is_free) {
+      return false
+    }
+    
+    if (filters.priceMin && (event.price_min || 0) < filters.priceMin) {
+      return false
+    }
+    
+    if (filters.priceMax && (event.price_max || 0) > filters.priceMax) {
+      return false
+    }
+    
+    return true
+  }).sort((a, b) => {
+    // Sort based on selected criteria
+    switch (sortBy) {
+      case 'date':
+        return new Date(a.date).getTime() - new Date(b.date).getTime()
+      case 'popular':
+        return (b.hotness_score || 0) - (a.hotness_score || 0)
+      case 'distance':
+        // Events are already sorted by distance in useLocalEvents
+        return 0
+      default: // relevance
+        return (b.hotness_score || 0) - (a.hotness_score || 0)
+    }
   })
-
-  const events = data?.pages.flatMap(page => page) ?? []
+  
+  const hasNextPage = false // Since we're not using infinite scroll with local data
+  const isFetchingNextPage = false
+  const fetchNextPage = () => {}
 
   if (error) {
     return (
@@ -69,9 +129,16 @@ export function DiscoverPage() {
             <h1 className="text-5xl font-bold text-white mb-6">
               Discover Amazing Events
             </h1>
-            <p className="text-xl text-white/80 mb-8 max-w-2xl mx-auto">
+            <p className="text-xl text-white/80 mb-4 max-w-2xl mx-auto">
               Find the perfect events tailored to your interests and location
             </p>
+            
+            {userLocation && (
+              <div className="flex items-center justify-center space-x-2 mb-8 text-white/60">
+                <MapPin size={16} className="text-purple-400" />
+                <span>Showing events near {userLocation}</span>
+              </div>
+            )}
             
             {/* Search Bar */}
             <div className="max-w-2xl mx-auto relative">
@@ -136,11 +203,16 @@ export function DiscoverPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setShowFilters(!showFilters)}
+                onClick={() => setShowFilters(true)}
                 className="text-white/60 hover:text-white"
               >
                 <Filter size={16} className="mr-2" />
                 More Filters
+                {Object.keys(filters).length > 0 && (
+                  <Badge className="ml-2 bg-purple-600">
+                    {Object.keys(filters).length}
+                  </Badge>
+                )}
               </Button>
             </div>
 
@@ -149,46 +221,6 @@ export function DiscoverPage() {
             </div>
           </div>
 
-          {/* Advanced Filters (Hidden by default) */}
-          {showFilters && (
-            <div className="mt-4 p-4 bg-gray-800/50 rounded-lg">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-white/60 text-sm mb-2 block">Date Range</label>
-                  <div className="flex space-x-2">
-                    <Input
-                      type="date"
-                      className="bg-gray-800 border-gray-700 text-white"
-                    />
-                    <Input
-                      type="date"
-                      className="bg-gray-800 border-gray-700 text-white"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-white/60 text-sm mb-2 block">Price Range</label>
-                  <div className="flex space-x-2">
-                    <Input
-                      placeholder="Min"
-                      className="bg-gray-800 border-gray-700 text-white"
-                    />
-                    <Input
-                      placeholder="Max"
-                      className="bg-gray-800 border-gray-700 text-white"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-white/60 text-sm mb-2 block">Distance</label>
-                  <Input
-                    placeholder="Within miles"
-                    className="bg-gray-800 border-gray-700 text-white"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Events Grid */}
@@ -236,6 +268,14 @@ export function DiscoverPage() {
             )}
           </>
         )}
+
+        {/* Filters Modal */}
+        <EventFiltersModal
+          isOpen={showFilters}
+          onClose={() => setShowFilters(false)}
+          onApply={setFilters}
+          currentFilters={filters}
+        />
       </div>
     </div>
   )

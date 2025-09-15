@@ -1,5 +1,5 @@
-import { useEvents } from '@/hooks/useEvents'
-import { EventCard } from './EventCard'
+import { useLocationCategoryEvents } from '@/hooks/useLocationEvents'
+import { EventCard } from '@/components/events/EventCard'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import type { EventCategory } from '@/services/events.service'
 
@@ -10,10 +10,7 @@ interface CategoryRowProps {
 }
 
 export function CategoryRow({ category, title, icon }: CategoryRowProps) {
-  const { data: events, isLoading, error } = useEvents({ 
-    categories: [category],
-    limit: 10
-  })
+  const { data: events, isLoading, error } = useLocationCategoryEvents(category, 10)
 
   if (error) {
     return (

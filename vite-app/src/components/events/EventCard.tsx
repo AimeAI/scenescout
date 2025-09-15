@@ -5,19 +5,32 @@ import { Card, CardContent } from '@/components/ui/card'
 import { formatDate, formatTime, formatPrice, cn } from '@/lib/utils'
 import { useSaveEvent, useUnsaveEvent, useIsEventSaved } from '@/hooks/useEvents'
 
+function getSourceLabel(source: string): string {
+  const sourceMap: Record<string, string> = {
+    'eventbrite': 'EB',
+    'ticketmaster': 'TM', 
+    'google_places': 'Google',
+    'yelp': 'Yelp',
+    'meetup': 'Meetup',
+    'songkick': 'SK'
+  }
+  return sourceMap[source] || source.toUpperCase()
+}
+
 interface Event {
   id: string
   title: string
-  description: string
+  description: string | null
   date: string
-  time?: string
-  venue_name?: string
-  image_url?: string
-  video_url?: string
-  price_min?: number
-  price_max?: number
+  time?: string | null
+  venue_name?: string | null
+  image_url?: string | null
+  video_url?: string | null
+  price_min?: number | null
+  price_max?: number | null
   is_free?: boolean
   category: string
+  source?: string | null
 }
 
 interface EventCardProps {
@@ -66,7 +79,7 @@ export function EventCard({
     if (navigator.share) {
       navigator.share({
         title: event.title,
-        text: event.description,
+        text: event.description || event.title,
         url: `/event/${event.id}`
       })
     }
@@ -123,11 +136,16 @@ export function EventCard({
           </button>
         )}
 
-        {/* Category Badge */}
-        <div className="absolute top-3 left-3">
+        {/* Badges */}
+        <div className="absolute top-3 left-3 flex flex-col gap-2">
           <span className="px-2 py-1 bg-black/70 text-white text-xs font-medium rounded-full backdrop-blur-sm">
             {event.category}
           </span>
+          {event.source && (
+            <span className="px-2 py-1 bg-purple-600/80 text-white text-xs font-medium rounded-full backdrop-blur-sm">
+              {getSourceLabel(event.source)}
+            </span>
+          )}
         </div>
 
         {/* Action Buttons */}
@@ -193,7 +211,7 @@ export function EventCard({
         <div className="mt-3 pt-3 border-t border-gray-800">
           <div className="flex items-center justify-between">
             <span className="text-white font-medium">
-              {formatPrice(event.price_min, event.price_max, event.is_free)}
+              {formatPrice(event.price_min ?? undefined, event.price_max ?? undefined, event.is_free)}
             </span>
             
             <Button size="sm" className="bg-purple-600 hover:bg-purple-700">

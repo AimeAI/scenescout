@@ -1,476 +1,392 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { Database } from "../_shared/types.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 interface EventbriteEvent {
-  id: string;
+  id: string
   name: {
-    text: string;
-    html: string;
-  };
+    text: string
+  }
   description: {
-    text: string;
-    html: string;
-  };
-  url: string;
+    text: string
+  }
   start: {
-    timezone: string;
-    local: string;
-    utc: string;
-  };
+    timezone: string
+    local: string
+    utc: string
+  }
   end: {
-    timezone: string;
-    local: string;
-    utc: string;
-  };
-  organization_id: string;
-  created: string;
-  changed: string;
-  published: string;
-  capacity: number;
-  capacity_is_custom: boolean;
-  status: string;
-  currency: string;
-  listed: boolean;
-  shareable: boolean;
-  online_event: boolean;
-  tx_time_limit: number;
-  hide_start_date: boolean;
-  hide_end_date: boolean;
-  locale: string;
-  is_locked: boolean;
-  privacy_setting: string;
-  is_series: boolean;
-  is_series_parent: boolean;
-  inventory_type: string;
-  is_reserved_seating: boolean;
-  show_pick_a_seat: boolean;
-  show_seatmap_thumbnail: boolean;
-  show_colors_in_seatmap_thumbnail: boolean;
-  source: string;
-  is_free: boolean;
-  version: string;
-  summary: string;
-  logo_id: string;
-  organizer_id: string;
-  venue_id: string;
-  category_id: string;
-  subcategory_id: string;
-  format_id: string;
-  resource_uri: string;
-  is_externally_ticketed: boolean;
+    timezone: string
+    local: string
+    utc: string
+  }
+  venue?: {
+    id: string
+    name: string
+    address: {
+      address_1?: string
+      city?: string
+      region?: string
+      country?: string
+      latitude?: string
+      longitude?: string
+    }
+  }
+  ticket_availability: {
+    minimum_ticket_price?: {
+      major_value: number
+      currency: string
+    }
+    maximum_ticket_price?: {
+      major_value: number
+      currency: string
+    }
+  }
   logo?: {
-    crop_mask: {
-      top_left: { x: number; y: number };
-      width: number;
-      height: number;
-    };
-    original: {
-      url: string;
-      width: number;
-      height: number;
-    };
-    id: string;
-    url: string;
-    aspect_ratio: string;
-    edge_color: string;
-    edge_color_set: boolean;
-  };
+    url: string
+  }
+  category_id: string
+  is_free: boolean
 }
 
-interface EventbriteVenue {
-  resource_uri: string;
-  id: string;
-  name: string;
-  latitude: string;
-  longitude: string;
-  address: {
-    address_1: string;
-    address_2: string;
-    city: string;
-    region: string;
-    postal_code: string;
-    country: string;
-    localized_address_display: string;
-    localized_area_display: string;
-    localized_multi_line_address_display: string[];
-  };
+const EVENTBRITE_CATEGORIES = {
+  '103': 'music',
+  '108': 'sports',
+  '105': 'arts',
+  '110': 'food',
+  '102': 'business',
+  '113': 'community',
+  '104': 'film',
+  '117': 'health',
+  '118': 'education',
+  '109': 'travel'
 }
 
-interface EventbriteOrganizer {
-  resource_uri: string;
-  id: string;
-  name: string;
-  description: {
-    text: string;
-    html: string;
-  };
-  long_description: {
-    text: string;
-    html: string;
-  };
-  logo_id: string;
-  url: string;
-  vanity_url: string;
-  num_past_events: number;
-  num_future_events: number;
-  twitter: string;
-  facebook: string;
-  instagram: string;
-  logo?: {
-    crop_mask: {
-      top_left: { x: number; y: number };
-      width: number;
-      height: number;
-    };
-    original: {
-      url: string;
-      width: number;
-      height: number;
-    };
-    id: string;
-    url: string;
-    aspect_ratio: string;
-    edge_color: string;
-    edge_color_set: boolean;
-  };
+const RATE_LIMIT = {
+  requests: 0,
+  resetTime: 0,
+  maxRequests: 1000 // Eventbrite allows 1000 requests per hour
 }
 
-interface EventbriteTicketClass {
-  resource_uri: string;
-  id: string;
-  name: string;
-  description: string;
-  donation: boolean;
-  free: boolean;
-  minimum_quantity: number;
-  maximum_quantity: number;
-  maximum_quantity_per_order: number;
-  on_sale_status: string;
-  on_sale_status_message: string;
-  event_id: string;
-  order_confirmation_message: string;
-  cost: {
-    currency: string;
-    value: number;
-    major_value: string;
-    display: string;
-  };
-  fee: {
-    currency: string;
-    value: number;
-    major_value: string;
-    display: string;
-  };
-  tax: {
-    currency: string;
-    value: number;
-    major_value: string;
-    display: string;
-  };
-  actual_cost: {
-    currency: string;
-    value: number;
-    major_value: string;
-    display: string;
-  };
-  sales_start: string;
-  sales_end: string;
-  sales_start_after: string;
-  include_fee: boolean;
-  split_fee: boolean;
-  hide_description: boolean;
-  hide_sale_dates: boolean;
-  auto_hide: boolean;
-  auto_hide_before: string;
-  auto_hide_after: string;
-  variant: string;
-  hidden: boolean;
-  order_confirmation_message_type: string;
-  delivery_methods: string[];
-  category: string;
-  inventory_tier: string;
-  secondary_assignment_enabled: boolean;
+async function checkRateLimit() {
+  const now = Date.now()
+  
+  if (now > RATE_LIMIT.resetTime) {
+    RATE_LIMIT.requests = 0
+    RATE_LIMIT.resetTime = now + (60 * 60 * 1000) // Reset after 1 hour
+  }
+  
+  if (RATE_LIMIT.requests >= RATE_LIMIT.maxRequests) {
+    throw new Error('Rate limit exceeded. Try again later.')
+  }
+  
+  RATE_LIMIT.requests++
 }
 
-interface EventbriteResponse {
-  events: EventbriteEvent[];
-  pagination: {
-    object_count: number;
-    page_number: number;
-    page_size: number;
-    page_count: number;
-    continuation: string;
-    has_more_items: boolean;
-  };
+async function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-/**
- * Supabase Edge Function to ingest events from Eventbrite API
- * Fetches events from Eventbrite Events API and stores them in the database
- */
-serve(async (req) => {
+async function fetchEventbriteEvents(location: string, page: number = 1, retryCount = 0): Promise<EventbriteEvent[]> {
+  const MAX_RETRIES = 3
+  const RETRY_DELAY = 1000
+
   try {
-    // Initialize Supabase client
-    const supabase = createClient<Database>(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
-    // Get API token from environment variables
-    const token = Deno.env.get('EVENTBRITE_TOKEN');
+    await checkRateLimit()
+    
+    const token = Deno.env.get('EVENTBRITE_TOKEN')
     if (!token) {
-      return new Response(
-        JSON.stringify({ error: 'Eventbrite API token not configured' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      );
+      throw new Error('EVENTBRITE_TOKEN environment variable is required')
     }
 
-    // Get query parameters
-    const url = new URL(req.url);
-    const location = url.searchParams.get('location') || 'San Francisco, CA';
-    const startDate = url.searchParams.get('start_date') || new Date().toISOString().split('T')[0] + 'T00:00:00Z';
-    const categories = url.searchParams.get('categories') || '';
-    const q = url.searchParams.get('q') || '';
+    const url = new URL('https://www.eventbriteapi.com/v3/events/search/')
+    url.searchParams.set('location.address', location)
+    url.searchParams.set('start_date.range_start', new Date().toISOString())
+    url.searchParams.set('expand', 'venue,ticket_availability,category')
+    url.searchParams.set('page', page.toString())
+    url.searchParams.set('sort_by', 'date')
 
-    console.log(`Fetching Eventbrite events for location: ${location}`);
-
-    // Construct Eventbrite API URL
-    const eventbriteUrl = new URL('https://www.eventbriteapi.com/v3/events/search/');
-    eventbriteUrl.searchParams.set('location.address', location);
-    eventbriteUrl.searchParams.set('location.within', '25mi');
-    eventbriteUrl.searchParams.set('start_date.range_start', startDate);
-    eventbriteUrl.searchParams.set('sort_by', 'date');
-    eventbriteUrl.searchParams.set('expand', 'venue,organizer,ticket_classes');
-    eventbriteUrl.searchParams.set('page_size', '50');
-    
-    if (categories) {
-      eventbriteUrl.searchParams.set('categories', categories);
-    }
-    
-    if (q) {
-      eventbriteUrl.searchParams.set('q', q);
-    }
-
-    // Fetch events from Eventbrite
-    const response = await fetch(eventbriteUrl.toString(), {
+    const response = await fetch(url.toString(), {
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json',
-        'User-Agent': 'SceneScout/1.0'
+        'Content-Type': 'application/json'
       }
-    });
+    })
 
     if (!response.ok) {
-      console.error(`Eventbrite API error: ${response.status} ${response.statusText}`);
-      const errorBody = await response.text();
-      console.error('Error response:', errorBody);
-      return new Response(
-        JSON.stringify({ 
-          error: 'Failed to fetch from Eventbrite API',
-          status: response.status,
-          statusText: response.statusText,
-          details: errorBody
-        }),
-        { status: response.status, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const data: EventbriteResponse = await response.json();
-    const events = data.events || [];
-
-    console.log(`Found ${events.length} events from Eventbrite`);
-
-    // Process and insert events
-    const processedEvents = [];
-    const processedVenues = [];
-    const processedOrganizers = [];
-
-    for (const event of events) {
-      try {
-        // Process venue if it exists
-        let venueId = null;
-        if (event.venue_id && (event as any).venue) {
-          const venue = (event as any).venue as EventbriteVenue;
-          
-          const venueData = {
-            id: venue.id,
-            name: venue.name,
-            address: venue.address?.address_1 || '',
-            city: venue.address?.city || '',
-            state: venue.address?.region || '',
-            postal_code: venue.address?.postal_code || '',
-            country: venue.address?.country || 'United States',
-            latitude: parseFloat(venue.latitude || '0'),
-            longitude: parseFloat(venue.longitude || '0'),
-            phone: null,
-            website: null,
-            timezone: event.start?.timezone || 'America/Los_Angeles',
-            capacity: null,
-            venue_type: 'unknown',
-            amenities: [],
-            accessibility_features: [],
-            parking_info: null,
-            source: 'eventbrite',
-            external_id: venue.id,
-            last_updated: new Date().toISOString()
-          };
-
-          processedVenues.push(venueData);
-          venueId = venue.id;
-        }
-
-        // Process organizer if it exists
-        if (event.organizer_id && (event as any).organizer) {
-          const organizer = (event as any).organizer as EventbriteOrganizer;
-          
-          const organizerData = {
-            id: organizer.id,
-            name: organizer.name,
-            description: organizer.description?.text || '',
-            website: organizer.url || null,
-            social_media: {
-              twitter: organizer.twitter || null,
-              facebook: organizer.facebook || null,
-              instagram: organizer.instagram || null
-            },
-            logo_url: organizer.logo?.original?.url || null,
-            source: 'eventbrite',
-            external_id: organizer.id,
-            last_updated: new Date().toISOString()
-          };
-
-          processedOrganizers.push(organizerData);
-        }
-
-        // Determine pricing from ticket classes
-        let priceMin = null;
-        let priceMax = null;
-        let isFree = event.is_free;
+      if (response.status === 429) {
+        // Rate limited - wait and retry
+        const retryAfter = response.headers.get('Retry-After')
+        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : RETRY_DELAY * Math.pow(2, retryCount)
         
-        if ((event as any).ticket_classes) {
-          const ticketClasses = (event as any).ticket_classes as EventbriteTicketClass[];
-          const prices = ticketClasses
-            .filter(tc => !tc.free && tc.cost?.value > 0)
-            .map(tc => tc.cost.value / 100); // Convert cents to dollars
-          
-          if (prices.length > 0) {
-            priceMin = Math.min(...prices);
-            priceMax = Math.max(...prices);
-            isFree = false;
-          }
+        if (retryCount < MAX_RETRIES) {
+          console.log(`Rate limited. Waiting ${waitTime}ms before retry ${retryCount + 1}...`)
+          await sleep(waitTime)
+          return fetchEventbriteEvents(location, page, retryCount + 1)
         }
-
-        // Process event
-        const eventData = {
-          id: event.id,
-          title: event.name?.text || 'Untitled Event',
-          description: event.description?.text || event.summary || '',
-          start_time: event.start?.utc || event.start?.local,
-          end_time: event.end?.utc || event.end?.local,
-          timezone: event.start?.timezone || 'America/Los_Angeles',
-          venue_id: venueId,
-          organizer_id: event.organizer_id || null,
-          category: 'Community', // Eventbrite events are typically community events
-          subcategory: null,
-          tags: [],
-          price_min: isFree ? 0 : priceMin,
-          price_max: isFree ? 0 : priceMax,
-          price_currency: event.currency || 'USD',
-          ticket_url: event.url,
-          image_url: event.logo?.original?.url || null,
-          source: 'eventbrite',
-          external_id: event.id,
-          status: event.status === 'live' && event.listed ? 'active' : 'inactive',
-          age_restriction: null,
-          capacity: event.capacity || null,
-          last_updated: new Date().toISOString(),
-          hotness_score: 0
-        };
-
-        processedEvents.push(eventData);
-
-      } catch (error) {
-        console.error(`Error processing event ${event.id}:`, error);
-        continue;
       }
+      
+      throw new Error(`Eventbrite API error: ${response.status} ${response.statusText}`)
     }
 
-    // Insert organizers first
-    if (processedOrganizers.length > 0) {
-      const { error: organizerError } = await supabase
-        .from('organizers')
-        .upsert(processedOrganizers, { 
-          onConflict: 'external_id,source',
-          ignoreDuplicates: false 
-        });
+    const data = await response.json()
+    return data.events || []
+    
+  } catch (error) {
+    if (retryCount < MAX_RETRIES) {
+      console.log(`Error fetching events. Retrying ${retryCount + 1}/${MAX_RETRIES}...`)
+      await sleep(RETRY_DELAY * Math.pow(2, retryCount))
+      return fetchEventbriteEvents(location, page, retryCount + 1)
+    }
+    
+    throw error
+  }
+}
 
-      if (organizerError) {
-        console.error('Error inserting organizers:', organizerError);
-      } else {
-        console.log(`Inserted/updated ${processedOrganizers.length} organizers`);
-      }
+async function processEvent(supabase: any, event: EventbriteEvent, cityId: string) {
+  try {
+    // Check if event already exists
+    const { data: existing } = await supabase
+      .from('events')
+      .select('id')
+      .eq('external_id', event.id)
+      .eq('source', 'eventbrite')
+      .single()
+
+    if (existing) {
+      console.log(`Event ${event.id} already exists, skipping`)
+      return { skipped: true }
     }
 
-    // Insert venues
-    if (processedVenues.length > 0) {
-      const { error: venueError } = await supabase
+    // Process venue if available
+    let venueId = null
+    if (event.venue) {
+      const { data: venue, error: venueError } = await supabase
         .from('venues')
-        .upsert(processedVenues, { 
-          onConflict: 'external_id,source',
-          ignoreDuplicates: false 
-        });
+        .upsert({
+          external_id: event.venue.id,
+          name: event.venue.name,
+          address: [
+            event.venue.address.address_1,
+            event.venue.address.city,
+            event.venue.address.region
+          ].filter(Boolean).join(', '),
+          city_id: cityId,
+          latitude: event.venue.address.latitude ? parseFloat(event.venue.address.latitude) : null,
+          longitude: event.venue.address.longitude ? parseFloat(event.venue.address.longitude) : null,
+        })
+        .select('id')
+        .single()
 
       if (venueError) {
-        console.error('Error inserting venues:', venueError);
+        console.error('Venue processing error:', venueError)
       } else {
-        console.log(`Inserted/updated ${processedVenues.length} venues`);
+        venueId = venue.id
       }
     }
 
-    // Insert events
-    if (processedEvents.length > 0) {
-      const { error: eventError } = await supabase
-        .from('events')
-        .upsert(processedEvents, { 
-          onConflict: 'external_id,source',
-          ignoreDuplicates: false 
-        });
+    // Insert event
+    const { error: eventError } = await supabase
+      .from('events')
+      .insert({
+        external_id: event.id,
+        source: 'eventbrite',
+        title: event.name.text,
+        description: event.description?.text || '',
+        date: event.start.local.split('T')[0],
+        time: event.start.local.split('T')[1]?.substring(0, 5),
+        end_date: event.end.local.split('T')[0],
+        end_time: event.end.local.split('T')[1]?.substring(0, 5),
+        timezone: event.start.timezone,
+        venue_id: venueId,
+        city_id: cityId,
+        category: EVENTBRITE_CATEGORIES[event.category_id] || 'other',
+        is_free: event.is_free,
+        price_min: event.ticket_availability?.minimum_ticket_price?.major_value || null,
+        price_max: event.ticket_availability?.maximum_ticket_price?.major_value || null,
+        currency: event.ticket_availability?.minimum_ticket_price?.currency || 'USD',
+        image_url: event.logo?.url || null,
+        external_url: `https://www.eventbrite.com/e/${event.id}`,
+      })
 
-      if (eventError) {
-        console.error('Error inserting events:', eventError);
-        return new Response(
-          JSON.stringify({ 
-            error: 'Failed to insert events into database',
-            details: eventError 
-          }),
-          { status: 500, headers: { 'Content-Type': 'application/json' } }
-        );
+    if (eventError) {
+      console.error('Event insertion error:', eventError)
+      return { error: eventError }
+    }
+
+    return { success: true }
+    
+  } catch (error) {
+    console.error('Event processing error:', error)
+    return { error }
+  }
+}
+
+serve(async (req) => {
+  if (req.method !== 'POST') {
+    return new Response('Method not allowed', { status: 405 })
+  }
+
+  // Check for API token
+  const token = Deno.env.get('EVENTBRITE_TOKEN')
+  if (!token) {
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        message: 'disabled: missing EVENTBRITE_TOKEN' 
+      }),
+      { 
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
       }
+    )
+  }
 
-      console.log(`Inserted/updated ${processedEvents.length} events`);
+  let jobId: string | null = null
+
+  try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    // Start job logging
+    const { data: jobData, error: jobError } = await supabase
+      .rpc('start_job_run', {
+        p_job_name: 'ingest_eventbrite',
+        p_metadata: { 
+          triggered_at: new Date().toISOString(),
+          environment: Deno.env.get('ENVIRONMENT') || 'production'
+        }
+      })
+
+    if (jobError) {
+      console.error('Failed to start job run:', jobError)
+    } else {
+      jobId = jobData
+    }
+
+    const { cities } = await req.json()
+    const targetCities = cities || ['San Francisco', 'New York', 'Los Angeles', 'Chicago']
+    const startTime = Date.now()
+
+    let totalProcessed = 0
+    let totalInserted = 0
+    let totalErrors = 0
+    let totalSkipped = 0
+
+    for (const cityName of targetCities) {
+      try {
+        console.log(`Processing events for ${cityName}...`)
+        
+        // Get or create city
+        const { data: city, error: cityError } = await supabase
+          .from('cities')
+          .upsert({
+            name: cityName,
+            slug: cityName.toLowerCase().replace(/\s+/g, '-'),
+            state: 'Unknown', // Will be updated later
+            country: 'US'
+          })
+          .select('id')
+          .single()
+
+        if (cityError) {
+          console.error(`City error for ${cityName}:`, cityError)
+          continue
+        }
+
+        // Fetch events for this city
+        const events = await fetchEventbriteEvents(cityName)
+        console.log(`Found ${events.length} events for ${cityName}`)
+
+        // Process each event
+        for (const event of events) {
+          const result = await processEvent(supabase, event, city.id)
+          
+          if (result.success) {
+            totalProcessed++
+            totalInserted++
+          } else if (result.skipped) {
+            totalSkipped++
+          } else {
+            totalErrors++
+          }
+          
+          // Small delay to avoid overwhelming the database
+          await sleep(100)
+        }
+        
+      } catch (cityError) {
+        console.error(`Error processing city ${cityName}:`, cityError)
+        totalErrors++
+      }
+    }
+
+    // Complete job run
+    if (jobId) {
+      await supabase.rpc('complete_job_run', {
+        p_job_id: jobId,
+        p_status: 'completed',
+        p_records_processed: totalProcessed + totalSkipped,
+        p_records_inserted: totalInserted,
+        p_records_updated: 0,
+        p_records_skipped: totalSkipped,
+        p_errors_count: totalErrors
+      })
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        eventsProcessed: processedEvents.length,
-        venuesProcessed: processedVenues.length,
-        organizersProcessed: processedOrganizers.length,
-        totalFound: events.length,
-        hasMore: data.pagination?.has_more_items || false
+        processed: totalProcessed,
+        inserted: totalInserted,
+        skipped: totalSkipped,
+        errors: totalErrors,
+        cities: targetCities.length,
+        jobId
       }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
-    );
+      { 
+        status: 200, 
+        headers: { 'Content-Type': 'application/json' } 
+      }
+    )
 
   } catch (error) {
-    console.error('Error in ingest_eventbrite function:', error);
+    console.error('Ingestion error:', error)
+    
+    // Mark job as failed
+    if (jobId) {
+      try {
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        )
+        
+        await supabase.rpc('complete_job_run', {
+          p_job_id: jobId,
+          p_status: 'failed',
+          p_records_processed: 0,
+          p_records_inserted: 0,
+          p_records_updated: 0,
+          p_records_skipped: 0,
+          p_errors_count: 1,
+          p_error_details: error.message
+        })
+      } catch (jobError) {
+        console.error('Failed to update job status:', jobError)
+      }
+    }
+    
     return new Response(
       JSON.stringify({ 
-        error: 'Internal server error',
-        details: error.message 
+        success: false, 
+        error: error.message,
+        jobId 
       }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+      { 
+        status: 500, 
+        headers: { 'Content-Type': 'application/json' } 
+      }
+    )
   }
-});
+})
