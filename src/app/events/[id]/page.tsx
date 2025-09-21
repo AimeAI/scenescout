@@ -1,0 +1,413 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { AppLayout } from '@/components/layout/AppLayout'
+import { Button } from '@/components/ui/button'
+import { Calendar, Clock, MapPin, Users, DollarSign, ExternalLink, ArrowLeft, Share, Heart } from 'lucide-react'
+import { Event } from '@/types'
+import { cn } from '@/lib/utils'
+
+export default function EventDetailPage() {
+  const params = useParams()
+  const router = useRouter()
+  const [event, setEvent] = useState<Event | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saved, setSaved] = useState(false)
+  const [shareUrl, setShareUrl] = useState('')
+
+  useEffect(() => {
+    if (params.id) {
+      fetchEvent(params.id as string)
+      setShareUrl(window.location.href)
+    }
+  }, [params.id])
+
+  const fetchEvent = async (eventId: string) => {
+    try {
+      setLoading(true)
+      
+      // First try to get the specific event from API
+      const response = await fetch(`/api/events?limit=1000`)
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch events')
+      }
+
+      const { events } = await response.json()
+      const foundEvent = events.find((e: Event) => e.id === eventId)
+      
+      if (!foundEvent) {
+        router.push('/404')
+        return
+      }
+
+      setEvent(foundEvent)
+    } catch (error) {
+      console.error('Error fetching event:', error)
+      router.push('/404')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSave = () => {
+    setSaved(!saved)
+    // TODO: Implement actual save functionality
+  }
+
+  const handleShare = async () => {
+    if (navigator.share && event) {
+      try {
+        await navigator.share({
+          title: event.title,
+          text: event.description || `Check out this ${event.category} event!`,
+          url: shareUrl,
+        })
+      } catch (error) {
+        // Fallback to clipboard
+        navigator.clipboard.writeText(shareUrl)
+      }
+    } else {
+      navigator.clipboard.writeText(shareUrl)
+    }
+  }
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
+  }
+
+  const formatTime = (timeString: string) => {
+    if (!timeString) return null
+    const time = new Date(`2000-01-01T${timeString}`)
+    return time.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    })
+  }
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="min-h-screen bg-black text-white flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+        </div>
+      </AppLayout>
+    )
+  }
+
+  if (!event) {
+    return (
+      <AppLayout>
+        <div className="min-h-screen bg-black text-white flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">Event Not Found</h1>
+            <Button onClick={() => router.push('/')} variant="outline">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Home
+            </Button>
+          </div>
+        </div>
+      </AppLayout>
+    )
+  }
+
+  return (
+    <AppLayout>
+      <div className="min-h-screen bg-black text-white">
+        {/* Header */}
+        <div className="relative h-96 overflow-hidden">
+          {event.image_url && (
+            <div className="absolute inset-0">
+              <img
+                src={event.image_url}
+                alt={event.title}
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
+            </div>
+          )}
+          
+          <div className="relative z-10 h-full flex flex-col justify-between p-6 lg:p-12">
+            {/* Back button */}
+            <div className="flex justify-between items-start">
+              <Button
+                onClick={() => router.back()}
+                variant="outline"
+                size="sm"
+                className="bg-black/50 backdrop-blur-sm border-white/20"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back
+              </Button>
+              
+              <div className="flex space-x-2">
+                <Button
+                  onClick={handleShare}
+                  variant="outline"
+                  size="sm"
+                  className="bg-black/50 backdrop-blur-sm border-white/20"
+                >
+                  <Share className="w-4 h-4" />
+                </Button>
+                
+                <Button
+                  onClick={handleSave}
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "bg-black/50 backdrop-blur-sm border-white/20",
+                    saved && "bg-red-500/50 border-red-500/50"
+                  )}
+                >
+                  <Heart className={cn("w-4 h-4", saved && "fill-current")} />
+                </Button>
+              </div>
+            </div>
+
+            {/* Event title and category */}
+            <div>
+              <div className="flex items-center space-x-2 mb-4">
+                <span className="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-sm font-medium capitalize">
+                  {event.category}
+                </span>
+                {event.is_featured && (
+                  <span className="bg-gradient-to-r from-purple-500 to-pink-500 px-3 py-1 rounded-full text-sm font-medium">
+                    Featured
+                  </span>
+                )}
+              </div>
+              
+              <h1 className="text-4xl lg:text-6xl font-bold mb-4 leading-tight">
+                {event.title}
+              </h1>
+            </div>
+          </div>
+        </div>
+
+        {/* Event Details */}
+        <div className="max-w-4xl mx-auto p-6 lg:p-12">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Main Content */}
+            <div className="lg:col-span-2 space-y-8">
+              {/* Description */}
+              {event.description && (
+                <div>
+                  <h2 className="text-2xl font-bold mb-4">About This Event</h2>
+                  <p className="text-white/80 leading-relaxed text-lg">
+                    {event.description}
+                  </p>
+                </div>
+              )}
+
+              {/* External Links */}
+              <div className="space-y-4">
+                <h2 className="text-2xl font-bold">Event Links</h2>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {event.external_url && (
+                    <Button asChild className="justify-start h-auto p-4">
+                      <a href={event.external_url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="w-5 h-5 mr-3" />
+                        <div className="text-left">
+                          <div className="font-medium">Event Page</div>
+                          <div className="text-sm text-white/60">
+                            {event.source || 'External Site'}
+                          </div>
+                        </div>
+                      </a>
+                    </Button>
+                  )}
+                  
+                  {event.url && event.url !== event.external_url && (
+                    <Button asChild variant="outline" className="justify-start h-auto p-4">
+                      <a href={event.url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="w-5 h-5 mr-3" />
+                        <div className="text-left">
+                          <div className="font-medium">More Info</div>
+                          <div className="text-sm text-white/60">Additional Details</div>
+                        </div>
+                      </a>
+                    </Button>
+                  )}
+
+                  {event.video_url && (
+                    <Button asChild variant="outline" className="justify-start h-auto p-4">
+                      <a href={event.video_url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="w-5 h-5 mr-3" />
+                        <div className="text-left">
+                          <div className="font-medium">Watch Video</div>
+                          <div className="text-sm text-white/60">Event Preview</div>
+                        </div>
+                      </a>
+                    </Button>
+                  )}
+                </div>
+
+                {/* Source Attribution */}
+                {event.source && (
+                  <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                    <div className="text-sm text-white/60 mb-1">Event sourced from:</div>
+                    <div className="font-medium capitalize">{event.source}</div>
+                    {event.provider && event.provider !== event.source && (
+                      <div className="text-sm text-white/60">via {event.provider}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Event Info Sidebar */}
+            <div className="space-y-6">
+              {/* Date & Time */}
+              <div className="bg-white/5 rounded-lg p-6 border border-white/10">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <Calendar className="w-5 h-5 mr-2" />
+                  Date & Time
+                </h3>
+                
+                <div className="space-y-3">
+                  <div>
+                    <div className="font-medium">
+                      {formatDate(event.event_date || event.start_time || event.date || '')}
+                    </div>
+                    {event.time && (
+                      <div className="text-white/60 flex items-center mt-1">
+                        <Clock className="w-4 h-4 mr-1" />
+                        {formatTime(event.time)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Location */}
+              <div className="bg-white/5 rounded-lg p-6 border border-white/10">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <MapPin className="w-5 h-5 mr-2" />
+                  Location
+                </h3>
+                
+                <div className="space-y-2">
+                  <div className="font-medium">{event.venue_name || 'Venue TBA'}</div>
+                  {event.venue?.address && (
+                    <div className="text-white/60">{event.venue.address}</div>
+                  )}
+                  {event.city_name && (
+                    <div className="text-white/60">{event.city_name}</div>
+                  )}
+                </div>
+
+                {event.venue?.latitude && event.venue?.longitude && (
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="mt-4 w-full"
+                  >
+                    <a
+                      href={`https://www.google.com/maps?q=${event.venue.latitude},${event.venue.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <MapPin className="w-4 h-4 mr-2" />
+                      View on Map
+                    </a>
+                  </Button>
+                )}
+              </div>
+
+              {/* Pricing */}
+              <div className="bg-white/5 rounded-lg p-6 border border-white/10">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <DollarSign className="w-5 h-5 mr-2" />
+                  Pricing
+                </h3>
+                
+                <div className="space-y-2">
+                  {event.is_free ? (
+                    <div className="text-green-400 font-medium text-lg">Free Event</div>
+                  ) : (
+                    <div>
+                      {event.price_min !== undefined && event.price_max !== undefined ? (
+                        <div className="font-medium text-lg">
+                          ${event.price_min} - ${event.price_max}
+                        </div>
+                      ) : event.price_min !== undefined ? (
+                        <div className="font-medium text-lg">
+                          From ${event.price_min}
+                        </div>
+                      ) : (
+                        <div className="text-white/60">Price varies</div>
+                      )}
+                      
+                      {event.currency && event.currency !== 'USD' && (
+                        <div className="text-sm text-white/60">{event.currency}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Capacity */}
+              {(event.capacity || event.attendance_estimate) && (
+                <div className="bg-white/5 rounded-lg p-6 border border-white/10">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center">
+                    <Users className="w-5 h-5 mr-2" />
+                    Capacity
+                  </h3>
+                  
+                  <div>
+                    {event.capacity && (
+                      <div className="font-medium">{event.capacity.toLocaleString()} people</div>
+                    )}
+                    {event.attendance_estimate && (
+                      <div className="text-white/60">
+                        ~{event.attendance_estimate.toLocaleString()} expected
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Event Stats */}
+              <div className="bg-white/5 rounded-lg p-6 border border-white/10">
+                <h3 className="text-lg font-semibold mb-4">Event Stats</h3>
+                
+                <div className="space-y-3 text-sm">
+                  {event.view_count !== undefined && (
+                    <div className="flex justify-between">
+                      <span className="text-white/60">Views</span>
+                      <span>{event.view_count.toLocaleString()}</span>
+                    </div>
+                  )}
+                  
+                  {event.hotness_score !== undefined && (
+                    <div className="flex justify-between">
+                      <span className="text-white/60">Popularity</span>
+                      <span>{event.hotness_score}/100</span>
+                    </div>
+                  )}
+                  
+                  {event.created_at && (
+                    <div className="flex justify-between">
+                      <span className="text-white/60">Listed</span>
+                      <span>{new Date(event.created_at).toLocaleDateString()}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </AppLayout>
+  )
+}

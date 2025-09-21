@@ -9,6 +9,8 @@ import { createIcon } from './MapMarkerIcon'
 import { cn } from '@/lib/utils'
 import { MapMarker, MapFilter, Event, EventCategory, MapBounds } from '@/types'
 import { NetflixEventCard } from '../events/NetflixEventCard'
+import { RealtimeMapUpdates, RealtimeMapStats } from '../realtime/RealtimeMapUpdates'
+import { RealtimeNotificationBadge } from '../realtime/RealtimeEventStream'
 
 // Fix for default markers in react-leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -29,6 +31,8 @@ interface EventMapProps {
   onFiltersChange?: (filters: MapFilter) => void
   showFilters?: boolean
   showEventList?: boolean
+  showRealtime?: boolean
+  showRealtimeStats?: boolean
   className?: string
 }
 
@@ -112,6 +116,8 @@ function EventMapComponent({
   onFiltersChange,
   showFilters = true,
   showEventList = false,
+  showRealtime = true,
+  showRealtimeStats = true,
   className
 }: EventMapProps) {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
@@ -129,11 +135,11 @@ function EventMapComponent({
       longitude: event.venue!.longitude!,
       category: event.category as EventCategory,
       title: event.title,
-      date: event.event_date || event.date,
+      date: event.event_date || event.start_time || event.date || '',
       venue: event.venue_name || 'Unknown Venue',
       price: event.price_min ? `$${event.price_min}` : event.is_free ? 'Free' : 'Price varies',
       priceRange: event.price_min && event.price_max ? { min: event.price_min, max: event.price_max } : undefined,
-      imageUrl: event.image_url,
+      imageUrl: event.image_url ?? undefined,
       videoUrl: event.video_url,
       size: event.is_featured ? 'large' : 'medium',
     }))
@@ -142,9 +148,32 @@ function EventMapComponent({
   const filteredMarkers = markers.filter(marker => {
     if (!filters) return true
     
+    const event = events.find(e => e.id === marker.eventId)!
+    
+    // Category filtering
     const categoryMatch = filters.categories.length === 0 || filters.categories.includes(marker.category)
-    const dateMatch = true // TODO: Implement date filtering
-    const priceMatch = true // TODO: Implement price filtering
+    
+    // Date filtering
+    let dateMatch = true
+    if (filters.dateRange) {
+      const eventDate = new Date(event.event_date || event.start_time || event.date || '')
+      if (!isNaN(eventDate.getTime())) {
+        dateMatch = eventDate >= filters.dateRange.start && eventDate <= filters.dateRange.end
+      }
+    }
+    
+    // Price filtering
+    let priceMatch = true
+    if (filters.priceRange) {
+      if (filters.isFree) {
+        priceMatch = event.is_free === true
+      } else {
+        const eventPrice = event.price_min || 0
+        priceMatch = eventPrice >= filters.priceRange.min && eventPrice <= filters.priceRange.max
+      }
+    }
+    
+    // Video filtering
     const videoMatch = !filters.showVideoOnly || marker.videoUrl
     
     return categoryMatch && dateMatch && priceMatch && videoMatch
@@ -252,6 +281,21 @@ function EventMapComponent({
           markers={filteredMarkers}
         />
 
+        {/* Real-time updates */}
+        {showRealtime && (
+          <RealtimeMapUpdates
+            bounds={onBoundsChange && mapRef.current ? {
+              north: mapRef.current.getBounds().getNorth(),
+              south: mapRef.current.getBounds().getSouth(),
+              east: mapRef.current.getBounds().getEast(),
+              west: mapRef.current.getBounds().getWest()
+            } : undefined}
+            onBoundsChange={onBoundsChange}
+            showAnimations={true}
+            animationDuration={2000}
+          />
+        )}
+
         <MarkerClusterGroup
           chunkedLoading
           iconCreateFunction={createClusterCustomIcon}
@@ -295,13 +339,28 @@ function EventMapComponent({
         </MarkerClusterGroup>
       </MapContainer>
 
+      {/* Real-time notification badge */}
+      {showRealtime && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[1000]">
+          <RealtimeNotificationBadge
+            bounds={mapRef.current ? {
+              north: mapRef.current.getBounds().getNorth(),
+              south: mapRef.current.getBounds().getSouth(),
+              east: mapRef.current.getBounds().getEast(),
+              west: mapRef.current.getBounds().getWest()
+            } : undefined}
+            categories={filters?.categories}
+          />
+        </div>
+      )}
+
       {/* Map Controls */}
       <div className="absolute top-4 right-4 z-[1000] space-y-2">
         {/* Zoom to fit all markers */}
         <button
           onClick={() => {
             if (mapRef.current && filteredMarkers.length > 0) {
-              const group = new L.featureGroup(
+              const group = L.featureGroup(
                 filteredMarkers.map(marker => 
                   L.marker([marker.latitude, marker.longitude])
                 )
@@ -334,6 +393,20 @@ function EventMapComponent({
           </svg>
         </button>
       </div>
+
+      {/* Real-time stats */}
+      {showRealtimeStats && (
+        <div className="absolute bottom-20 left-4 z-[1000]">
+          <RealtimeMapStats
+            bounds={mapRef.current ? {
+              north: mapRef.current.getBounds().getNorth(),
+              south: mapRef.current.getBounds().getSouth(),
+              east: mapRef.current.getBounds().getEast(),
+              west: mapRef.current.getBounds().getWest()
+            } : undefined}
+          />
+        </div>
+      )}
 
       {/* Legend */}
       <div className="absolute bottom-4 left-4 z-[1000] bg-black/80 backdrop-blur-sm text-white p-4 rounded-lg border border-white/20 max-w-xs">

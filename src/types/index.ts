@@ -2,42 +2,49 @@
 export interface Event {
   id: string
   title: string
-  description: string
-  venue_id: string
+  description?: string | null
+  venue_id?: string | null
   venue_name?: string
-  city_id: string
+  city_id?: string | null
   city_name?: string
   category: string
-  date: string
-  event_date?: string // Alternative date field for compatibility
-  time?: string
-  end_time?: string
+  subcategory?: string | null
+  date?: string
+  event_date?: string
+  start_time?: string
+  end_time?: string | null
+  timezone?: string | null
   price?: number
-  price_min?: number
-  price_max?: number
-  currency?: string
-  image_url?: string
+  price_min?: number | null
+  price_max?: number | null
+  price_currency?: string | null
+  image_url?: string | null
   video_url?: string
-  website_url?: string
-  ticket_url?: string
+  website_url?: string | null
+  ticket_url?: string | null
+  external_url?: string | null
+  external_id?: string
+  source?: string
+  provider?: string
   tags?: string[]
-  is_featured: boolean
+  is_featured?: boolean
   is_free?: boolean
-  is_approved: boolean
-  status?: 'active' | 'cancelled' | 'postponed'
+  status?: EventStatus
   view_count?: number
-  created_at: string
-  updated_at: string
-  submitted_by: string
+  hotness_score?: number | null
+  created_at?: string
+  updated_at?: string
+  last_updated?: string
+  submitted_by?: string
   venue?: {
-    name: string
+    name?: string
     latitude?: number
     longitude?: number
     address?: string
   }
   city?: {
-    name: string
-    slug: string
+    name?: string
+    slug?: string
   }
 }
 
@@ -215,14 +222,26 @@ export interface PlanFormData {
 // Filter and search types
 export interface EventFilters {
   city?: string
+  categories?: EventCategory[]
   category?: string
   dateFrom?: string
   dateTo?: string
+  dateRange?: { start: Date; end: Date }
   priceMin?: number
   priceMax?: number
+  priceRange?: { min: number; max: number }
   isFree?: boolean
+  showFreeOnly?: boolean
+  showFeaturedOnly?: boolean
+  showVideoOnly?: boolean
   query?: string
   sort?: 'date' | 'price' | 'popularity' | 'relevance'
+  bounds?: {
+    north: number
+    south: number
+    east: number
+    west: number
+  }
 }
 
 export interface SearchFilters {
@@ -457,7 +476,7 @@ export interface RealTimeUpdate {
 }
 
 // Export commonly used type unions
-export type EventStatus = Event['is_approved']
+export type EventStatus = 'active' | 'inactive' | 'cancelled' | 'postponed' | 'draft'
 export type SubscriptionTier = UserProfile['subscription_tier']
 export type SubscriptionStatus = UserProfile['subscription_status']
 export type PlanStatus = Plan['status']
@@ -520,7 +539,7 @@ export interface MapMarker {
   longitude: number
   category: EventCategory
   title: string
-  date: string
+  date?: string
   venue: string
   price?: string
   priceRange?: { min?: number; max?: number }

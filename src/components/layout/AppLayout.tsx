@@ -28,5 +28,3 @@ export function AppLayout({ children, className }: AppLayoutProps) {
     </div>
   )
 }
-
-export default AppLayout

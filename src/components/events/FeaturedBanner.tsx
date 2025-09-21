@@ -61,8 +61,10 @@ export function FeaturedBanner({
     }
   }
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'Date TBA'
     const date = new Date(dateString)
+    if (Number.isNaN(date.getTime())) return 'Date TBA'
     return date.toLocaleDateString('en-US', { 
       weekday: 'long',
       month: 'long', 
@@ -178,7 +180,7 @@ export function FeaturedBanner({
             <div className="flex flex-wrap items-center gap-6 text-white/90 text-lg">
               <div className="flex items-center space-x-2">
                 <Calendar size={20} />
-                <span>{formatDate(currentEvent.event_date || currentEvent.date)}</span>
+                <span>{formatDate(currentEvent.event_date || currentEvent.start_time || currentEvent.date)}</span>
               </div>
               
               {currentEvent.venue_name && (

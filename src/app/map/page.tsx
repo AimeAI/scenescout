@@ -5,10 +5,11 @@ import dynamic from 'next/dynamic'
 import { createSafeSupabaseClient } from '@/lib/supabase'
 import { Maximize2, Minimize2, List, Map as MapIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import AppLayout from '@/components/layout/AppLayout'
+import { AppLayout } from '@/components/layout/AppLayout'
 import { MapFilters } from '@/components/map/MapFilters'
 import { NetflixEventCard } from '@/components/events/NetflixEventCard'
 import { Event, MapFilter, EventCategory, MapBounds } from '@/types'
+import { filterEventsClientSide, transformEventRow } from '@/lib/event-normalizer'
 
 // Dynamic import for EventMap to avoid SSR issues
 const EventMap = dynamic(() => import('@/components/map/EventMap'), {
@@ -28,7 +29,7 @@ export default function MapPage() {
   const [loading, setLoading] = useState(true)
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('split')
-  const [mapCenter, setMapCenter] = useState<[number, number]>([40.7128, -74.0060]) // NYC default
+  const [mapCenter, setMapCenter] = useState<[number, number]>([40.7128, -74.0060]) // Default center
   const [mapBounds, setMapBounds] = useState<MapBounds | null>(null)
   const [filters, setFilters] = useState<MapFilter>({
     categories: [] as EventCategory[],
@@ -41,100 +42,77 @@ export default function MapPage() {
     showVideoOnly: false,
   })
 
-  const supabase = createSafeSupabaseClient()
+  const { location, loading: locationLoading } = useUserLocation()
 
   useEffect(() => {
-    fetchEvents()
-  }, [])
+    if (location) {
+      setMapCenter([location.latitude, location.longitude])
+      fetchEvents(location.latitude, location.longitude)
+    } else {
+      fetchEvents()
+    }
+  }, [location])
 
   useEffect(() => {
     filterEvents()
   }, [events, filters, mapBounds])
 
-  const fetchEvents = async () => {
+  const fetchEvents = async (userLat?: number, userLng?: number) => {
     try {
       setLoading(true)
+
+      // Build API URL with location parameters
+      const params = new URLSearchParams()
+      params.append('limit', '1000')
       
-      // Get user's location if available
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            setMapCenter([position.coords.latitude, position.coords.longitude])
-          },
-          (error) => {
-            console.log('Geolocation not available:', error)
-          },
-          { timeout: 5000 }
-        )
+      if (userLat && userLng) {
+        params.append('lat', userLat.toString())
+        params.append('lng', userLng.toString())
+        params.append('radius', '100') // 100km radius for map view
       }
 
-      if (!supabase) {
-        console.log('Supabase not configured, using mock events for map')
-        setEvents(generateMockEvents())
-        setLoading(false)
+      const response = await fetch(`/api/events?${params.toString()}`)
+      
+      if (!response.ok) {
+        console.error('Failed to fetch events from API:', response.statusText)
+        setEvents([]) // No fallback to mock data
         return
       }
 
-      const { data, error } = await supabase
-        .from('events')
-        .select(`
-          *,
-          venue:venues(name, latitude, longitude, address),
-          city:cities(name, slug)
-        `)
-        .eq('is_approved', true)
-        .gte('date', new Date().toISOString())
-        .order('created_at', { ascending: false })
-        .limit(1000)
-
-      if (error) {
-        console.error('Error fetching events:', error)
-        setEvents(generateMockEvents())
+      const { events: apiEvents } = await response.json()
+      
+      if (!Array.isArray(apiEvents)) {
+        console.error('Invalid events data format')
+        setEvents([])
         return
       }
 
-      const transformedEvents: Event[] = data.map(event => ({
-        ...event,
-        event_date: event.date,
-        venue_name: event.venue?.name,
-        city_name: event.city?.name,
-      })) as Event[]
+      // Only use events with valid coordinates - no mock data
+      const eventsWithCoords = apiEvents.filter((event: any) => {
+        const lat = event.venue?.latitude || event.latitude
+        const lng = event.venue?.longitude || event.longitude
+        return lat && lng && !isNaN(lat) && !isNaN(lng) && 
+               event.source !== 'mock' && !event.id.startsWith('mock-')
+      })
 
-      setEvents(transformedEvents.length > 0 ? transformedEvents : generateMockEvents())
+      setEvents(eventsWithCoords)
     } catch (error) {
       console.error('Error fetching events:', error)
-      setEvents(generateMockEvents())
+      setEvents([])
     } finally {
       setLoading(false)
     }
   }
 
   const filterEvents = () => {
-    let filtered = events
-
-    // Category filter
-    if (filters.categories.length > 0) {
-      filtered = filtered.filter(event => 
-        filters.categories.includes(event.category as EventCategory)
-      )
-    }
-
-    // Date range filter
-    filtered = filtered.filter(event => {
-      const eventDate = new Date(event.date)
-      return eventDate >= filters.dateRange.start && eventDate <= filters.dateRange.end
+    let filtered = filterEventsClientSide(events, {
+      categories: filters.categories,
+      dateFrom: filters.dateRange.start.toISOString(),
+      dateTo: filters.dateRange.end.toISOString(),
+      priceMin: filters.priceRange.min > 0 ? filters.priceRange.min : undefined,
+      priceMax: filters.priceRange.max,
+      isFree: filters.isFree,
     })
-
-    // Price filter
-    if (filters.isFree) {
-      filtered = filtered.filter(event => event.is_free)
-    } else {
-      filtered = filtered.filter(event => {
-        if (event.is_free) return true
-        if (!event.price_min) return true
-        return event.price_min <= filters.priceRange.max
-      })
-    }
 
     // Video filter
     if (filters.showVideoOnly) {
@@ -144,13 +122,15 @@ export default function MapPage() {
     // Map bounds filter (only show events visible on map)
     if (mapBounds) {
       filtered = filtered.filter(event => {
-        if (!event.venue?.latitude || !event.venue?.longitude) return false
-        
+        const latitude = event.venue?.latitude ?? null
+        const longitude = event.venue?.longitude ?? null
+        if (latitude == null || longitude == null) return false
+
         return (
-          event.venue.latitude >= mapBounds.south &&
-          event.venue.latitude <= mapBounds.north &&
-          event.venue.longitude >= mapBounds.west &&
-          event.venue.longitude <= mapBounds.east
+          latitude >= mapBounds.south &&
+          latitude <= mapBounds.north &&
+          longitude >= mapBounds.west &&
+          longitude <= mapBounds.east
         )
       })
     }
@@ -174,54 +154,7 @@ export default function MapPage() {
     setMapBounds(bounds)
   }
 
-  // Mock event generation for fallback
-  const generateMockEvents = (): Event[] => {
-    const categories: EventCategory[] = ['music', 'sports', 'arts', 'food', 'tech', 'social']
-    const venues = [
-      { name: 'Madison Square Garden', lat: 40.7505, lng: -73.9934 },
-      { name: 'Brooklyn Bowl', lat: 40.7214, lng: -73.9618 },
-      { name: 'Lincoln Center', lat: 40.7722, lng: -73.9838 },
-      { name: 'Central Park', lat: 40.7851, lng: -73.9683 },
-      { name: 'Times Square', lat: 40.7580, lng: -73.9855 },
-      { name: 'High Line', lat: 40.7480, lng: -74.0048 },
-    ]
-
-    return Array.from({ length: 100 }, (_, i) => {
-      const venue = venues[i % venues.length]
-      const category = categories[i % categories.length]
-      
-      const eventDate = new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString()
-      
-      return {
-        id: `mock-${i}`,
-        title: `${category.charAt(0).toUpperCase() + category.slice(1)} Event ${i + 1}`,
-        description: `An amazing ${category} event you won't want to miss`,
-        date: eventDate,
-        event_date: eventDate,
-        venue_id: `venue-${i}`,
-        venue_name: venue.name,
-        venue: {
-          name: venue.name,
-          latitude: venue.lat + (Math.random() - 0.5) * 0.01,
-          longitude: venue.lng + (Math.random() - 0.5) * 0.01,
-          address: `${venue.name} Address`,
-        } as any,
-        city_id: 'nyc',
-        city_name: 'New York',
-        category: category,
-        image_url: `https://images.unsplash.com/photo-${1500000000000 + i}?w=400&h=225&fit=crop`,
-        video_url: Math.random() > 0.7 ? `https://sample-videos.com/zip/10/mp4/SampleVideo_${(i % 5) + 1}280x720_1mb.mp4` : undefined,
-        price_min: Math.random() > 0.3 ? Math.floor(Math.random() * 100) + 10 : undefined,
-        is_featured: Math.random() > 0.8,
-        is_free: Math.random() > 0.7,
-        is_approved: true,
-        status: 'active' as const,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        submitted_by: 'system'
-      }
-    })
-  }
+  // No mock data - removed entirely
 
   return (
     <AppLayout>

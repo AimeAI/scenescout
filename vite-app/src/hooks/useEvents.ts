@@ -15,12 +15,24 @@ export const eventKeys = {
   userSaved: (userId: string) => [...eventKeys.all, 'userSaved', userId] as const,
 }
 
-// Get events with filters
+// Get events with filters (location-aware)
 export function useEvents(filters: EventFilters = {}) {
   return useQuery({
     queryKey: eventKeys.list(filters),
     queryFn: () => eventsService.getEvents(filters),
     staleTime: 5 * 60 * 1000, // 5 minutes
+  })
+}
+
+// Get events for user's current city
+export function useLocationEvents(cityId?: string, filters: EventFilters = {}) {
+  const locationFilters = cityId ? { ...filters, cityId } : filters;
+  
+  return useQuery({
+    queryKey: [...eventKeys.list(locationFilters), 'location'],
+    queryFn: () => eventsService.getEvents(locationFilters),
+    enabled: true, // Always enabled, will show general events if no cityId
+    staleTime: 5 * 60 * 1000,
   })
 }
 

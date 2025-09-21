@@ -38,6 +38,8 @@ export function NetflixEventCard({
     large: 'aspect-video w-80 h-45'
   }
 
+  const imageSrc = event.image_url ?? '/placeholder-event.jpg'
+
   const handleMouseEnter = () => {
     // Delay hover effect to prevent accidental triggers
     hoverTimeoutRef.current = setTimeout(() => {
@@ -101,7 +103,7 @@ export function NetflixEventCard({
     // TODO: Implement share functionality
     navigator.share?.({
       title: event.title,
-      text: event.description,
+      text: event.description ?? undefined,
       url: `/events/${event.id}`
     })
   }
@@ -116,7 +118,10 @@ export function NetflixEventCard({
   }
 
   const formatDate = () => {
-    const date = new Date(event.event_date || event.date)
+    const rawValue = event.event_date || event.start_time || event.date || event.created_at
+    if (!rawValue) return 'TBD'
+    const date = new Date(rawValue)
+    if (Number.isNaN(date.getTime())) return 'TBD'
     return date.toLocaleDateString('en-US', { 
       month: 'short', 
       day: 'numeric',
@@ -148,7 +153,7 @@ export function NetflixEventCard({
         {/* Background Image */}
         <div className="absolute inset-0">
           <Image
-            src={event.image_url || '/placeholder-event.jpg'}
+            src={imageSrc}
             alt={event.title}
             fill
             className={cn(

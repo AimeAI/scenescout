@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { type User } from '@supabase/supabase-js'
+import { type User, type AuthChangeEvent, type Session } from '@supabase/supabase-js'
 
 export interface AuthUser extends User {
   profile?: {
@@ -300,7 +300,7 @@ export const permissionHelpers = {
 
 // Auth event listeners
 export const setupAuthListeners = () => {
-  return supabase.auth.onAuthStateChange((event, session) => {
+  return supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
     if (event === 'SIGNED_IN') {
       console.log('User signed in:', session?.user.email)
     } else if (event === 'SIGNED_OUT') {

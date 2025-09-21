@@ -1,0 +1,185 @@
+{
+  "protocolVersion": "1.0.0",
+  "lastUpdated": "2025-09-17T02:36:00.000Z",
+  "protocols": {
+    "messageFormat": {
+      "standard": {
+        "id": "string (required)",
+        "from": "string (required)",
+        "to": "string | string[] (required)",
+        "type": "enum: task | status | result | conflict | heartbeat | broadcast",
+        "priority": "enum: high | medium | low",
+        "payload": "any (required)",
+        "timestamp": "number (auto-generated)",
+        "retries": "number (optional)",
+        "ttl": "number (optional, time to live in ms)"
+      },
+      "validation": {
+        "required": ["id", "from", "to", "type", "payload"],
+        "maxPayloadSize": "1MB",
+        "maxRetries": 3,
+        "defaultTTL": 300000
+      }
+    },
+    "agentRegistration": {
+      "required": {
+        "id": "string (unique identifier)",
+        "type": "string (agent specialization)",
+        "capabilities": "string[] (list of capabilities)",
+        "status": "enum: active | busy | idle | offline"
+      },
+      "optional": {
+        "workload": "number (0-1, current capacity usage)",
+        "currentTasks": "string[] (list of active task IDs)",
+        "metadata": "object (additional agent information)"
+      },
+      "lifecycle": {
+        "registration": "Agent must register before sending/receiving messages",
+        "heartbeat": "Send heartbeat every 30 seconds",
+        "deregistration": "Graceful shutdown notification required"
+      }
+    },
+    "taskAssignment": {
+      "workflow": [
+        "1. Task created with requirements",
+        "2. System finds suitable agent based on capabilities and workload",
+        "3. Task assigned to agent via message",
+        "4. Agent accepts/rejects assignment",
+        "5. Task execution with status updates",
+        "6. Task completion notification"
+      ],
+      "assignmentCriteria": {
+        "capabilities": "Must match all required capabilities",
+        "workload": "Prefer agents with lower current workload",
+        "availability": "Agent must be in active or idle status",
+        "priority": "Higher priority tasks assigned first"
+      },
+      "timeouts": {
+        "assignmentResponse": 10000,
+        "taskExecution": 300000,
+        "statusUpdate": 60000
+      }
+    },
+    "conflictResolution": {
+      "types": {
+        "resource": "Multiple agents accessing same resource",
+        "task": "Task assignment conflicts",
+        "priority": "Priority-based disputes",
+        "deadlock": "Circular dependency resolution"
+      },
+      "resolutionStrategies": {
+        "resource": "Priority-based with timestamp fallback",
+        "task": "Workload balancing",
+        "priority": "First-come-first-served",
+        "deadlock": "Random winner with lock release"
+      },
+      "escalation": {
+        "automatic": "Critical conflicts auto-escalate",
+        "manual": "Unresolved conflicts after 5 minutes",
+        "notification": "Broadcast to all agents"
+      }
+    },
+    "healthMonitoring": {
+      "metrics": {
+        "heartbeat": "Agent liveness check every 30 seconds",
+        "responseTime": "Message round-trip time",
+        "taskCompletionRate": "Success rate of assigned tasks",
+        "errorRate": "Percentage of failed operations",
+        "workload": "Current capacity utilization"
+      },
+      "thresholds": {
+        "responseTimeWarning": 2000,
+        "responseTimeCritical": 5000,
+        "errorRateWarning": 0.1,
+        "errorRateCritical": 0.25,
+        "heartbeatTimeout": 45000
+      },
+      "alerts": {
+        "levels": ["info", "warning", "critical"],
+        "escalation": "Critical alerts broadcasted immediately",
+        "acknowledgment": "Manual alert acknowledgment required"
+      }
+    }
+  },
+  "networkTopology": {
+    "default": "mesh",
+    "supported": ["mesh", "star", "ring", "hierarchical"],
+    "characteristics": {
+      "mesh": "Full connectivity, high resilience, higher overhead",
+      "star": "Central coordinator, single point of failure",
+      "ring": "Ordered communication, moderate resilience",
+      "hierarchical": "Structured levels, scalable coordination"
+    }
+  },
+  "security": {
+    "authentication": {
+      "required": false,
+      "method": "token-based (future enhancement)",
+      "validation": "Message integrity verification"
+    },
+    "authorization": {
+      "agentPermissions": "Role-based access control",
+      "resourceAccess": "Lock-based resource protection",
+      "commandValidation": "Whitelist-based command filtering"
+    },
+    "encryption": {
+      "inTransit": "TLS for network communication (future)",
+      "atRest": "File-based storage encryption (future)",
+      "keyManagement": "Centralized key distribution (future)"
+    }
+  },
+  "performance": {
+    "optimization": {
+      "messageQueuing": "Priority-based FIFO queues",
+      "loadBalancing": "Workload-aware task distribution",
+      "caching": "Message and state caching",
+      "compression": "Payload compression for large messages"
+    },
+    "limits": {
+      "maxAgents": 100,
+      "maxQueueDepth": 1000,
+      "maxMessageSize": "1MB",
+      "maxConcurrentTasks": 50
+    },
+    "monitoring": {
+      "metricsCollection": "Real-time performance tracking",
+      "bottleneckDetection": "Automated performance analysis",
+      "scalingRecommendations": "Auto-scaling suggestions"
+    }
+  },
+  "errorHandling": {
+    "messageDelivery": {
+      "retryPolicy": "Exponential backoff with max 3 retries",
+      "deadLetterQueue": "Failed messages stored for analysis",
+      "circuitBreaker": "Temporary agent isolation on repeated failures"
+    },
+    "agentFailures": {
+      "detection": "Heartbeat timeout detection",
+      "recovery": "Automatic task reassignment",
+      "notification": "Failure alerts to all agents"
+    },
+    "systemFailures": {
+      "persistence": "State persistence for recovery",
+      "gracefulDegradation": "Reduced functionality mode",
+      "emergencyShutdown": "Safe system shutdown procedures"
+    }
+  },
+  "compliance": {
+    "logging": {
+      "messageAudit": "All messages logged with timestamps",
+      "agentActivity": "Agent lifecycle events tracked",
+      "systemEvents": "Health and performance events logged"
+    },
+    "privacy": {
+      "dataRetention": "24-hour metrics retention policy",
+      "sensitiveData": "No sensitive data in message payloads",
+      "anonymization": "Agent IDs can be anonymized"
+    }
+  },
+  "extensibility": {
+    "customMessageTypes": "Support for custom message types",
+    "pluginArchitecture": "Extensible conflict resolution strategies",
+    "protocolVersioning": "Backward compatibility support",
+    "integrationAPIs": "REST and WebSocket APIs for external systems"
+  }
+}

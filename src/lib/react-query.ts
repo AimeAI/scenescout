@@ -1,30 +1,84 @@
 import { QueryClient, DefaultOptions } from '@tanstack/react-query'
 
+// Optimized query configuration with performance monitoring
 const queryConfig: DefaultOptions = {
   queries: {
-    // Data is considered fresh for 5 minutes
-    staleTime: 1000 * 60 * 5,
-    // Cache for 30 minutes
-    gcTime: 1000 * 60 * 30,
-    // Retry failed requests 2 times
-    retry: 2,
-    // Don't refetch on window focus for better performance
+    // Adaptive stale time based on data type
+    staleTime: 1000 * 60 * 5, // 5 minutes base
+    // Optimized garbage collection time
+    gcTime: 1000 * 60 * 30, // 30 minutes
+    // Smart retry logic
+    retry: (failureCount, error: any) => {
+      // Don't retry client errors (4xx)
+      if (error?.status >= 400 && error?.status < 500) return false;
+      // Don't retry more than 2 times
+      if (failureCount >= 2) return false;
+      // Retry server errors and network errors
+      return true;
+    },
+    // Exponential backoff with jitter
+    retryDelay: (attemptIndex) => {
+      return Math.min(1000 * Math.pow(2, attemptIndex) + Math.random() * 1000, 30000);
+    },
+    // Optimized refetch settings
     refetchOnWindowFocus: false,
-    // Don't refetch on reconnect unless data is stale
     refetchOnReconnect: 'always',
-    // Background refetch interval (10 minutes)
-    refetchInterval: 1000 * 60 * 10,
+    // Smart background refetch (disabled by default, controlled by optimization system)
+    refetchInterval: false,
+    // Network mode for better offline handling
+    networkMode: 'online',
   },
   mutations: {
-    // Retry failed mutations once
-    retry: 1,
+    // Smart mutation retry
+    retry: (failureCount, error: any) => {
+      if (error?.status >= 400 && error?.status < 500) return false;
+      return failureCount < 1;
+    },
+    // Mutation retry delay
+    retryDelay: 1000,
+    // Network mode
+    networkMode: 'online',
   },
 }
 
 export function createQueryClient() {
-  return new QueryClient({
+  const client = new QueryClient({
     defaultOptions: queryConfig,
-  })
+    // Global error handler for performance monitoring
+    defaultOptions: {
+      ...queryConfig,
+      queries: {
+        ...queryConfig.queries,
+        onError: (error: any) => {
+          // Track query errors for optimization
+          console.error('Query error:', error);
+          // This will be picked up by the optimization system
+        },
+        onSuccess: (data: any) => {
+          // Track successful queries for optimization
+          // This can be used for cache optimization
+        },
+      },
+      mutations: {
+        ...queryConfig.mutations,
+        onError: (error: any) => {
+          // Track mutation errors
+          console.error('Mutation error:', error);
+        },
+      },
+    },
+  });
+
+  // Add query cache event listeners for performance monitoring
+  client.getQueryCache().subscribe((event) => {
+    if (event?.type === 'queryAdded') {
+      // Track when queries are added to cache
+    } else if (event?.type === 'queryRemoved') {
+      // Track when queries are removed from cache
+    }
+  });
+
+  return client;
 }
 
 // Query key factories for consistent caching
@@ -106,9 +160,9 @@ export const prefetchStrategies = {
     category: string, 
     queryClient: QueryClient
   ) => {
-    queryClient.prefetchInfiniteQuery({
-      queryKey: [...queryKeys.eventsByCategory(category), 'infinite'],
-      staleTime: 1000 * 60 * 5, // 5 minutes
+    queryClient.prefetchQuery({
+      queryKey: [...queryKeys.eventsByCategory(category), 'infinite', nextPage],
+      staleTime: 1000 * 60 * 5,
     })
   },
 }

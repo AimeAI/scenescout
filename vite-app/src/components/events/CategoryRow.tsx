@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
-import { useLocationCategoryEvents } from '@/hooks/useLocationEvents'
+import { useUserLocation } from '@/hooks/useUserLocation'
+import { useLocationEvents } from '@/hooks/useEvents'
 import { EventCard } from '@/components/events/EventCard'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import type { EventCategory } from '@/services/events.service'
@@ -12,7 +13,16 @@ interface CategoryRowProps {
 
 export function CategoryRow({ category, title, icon }: CategoryRowProps) {
   const navigate = useNavigate()
-  const { data: events, isLoading, error } = useLocationCategoryEvents(category, 10)
+  const userLocation = useUserLocation()
+  
+  // Use a more robust query that doesn't fail when cityId is missing
+  const { data: events, isLoading, error } = useLocationEvents(
+    userLocation.cityId || undefined, 
+    { 
+      category, 
+      limit: 10 
+    }
+  )
 
   if (error) {
     return (

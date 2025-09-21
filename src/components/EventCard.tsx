@@ -14,6 +14,8 @@ interface Event {
   venue: string
   city: string
   date: string
+  event_date?: string
+  start_time?: string
   time?: string
   image: string
   price?: number
@@ -59,8 +61,10 @@ export default function EventCard({
     }
   }
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'TBD'
     const date = new Date(dateString)
+    if (Number.isNaN(date.getTime())) return 'TBD'
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -103,7 +107,7 @@ export default function EventCard({
             <div className="flex items-center space-x-3 text-xs text-muted-foreground">
               <div className="flex items-center">
                 <Calendar className="w-3 h-3 mr-1" />
-                {formatDate(event.date)}
+                {formatDate(event.event_date || event.start_time || event.date)}
               </div>
               <div className="flex items-center">
                 <MapPin className="w-3 h-3 mr-1" />
@@ -161,7 +165,7 @@ export default function EventCard({
           <div className="space-y-2 text-sm text-muted-foreground">
             <div className="flex items-center">
               <Calendar className="w-4 h-4 mr-2" />
-              <span>{formatDate(event.date)}</span>
+              <span>{formatDate(event.event_date || event.start_time || event.date)}</span>
               {event.time && (
                 <>
                   <Clock className="w-4 h-4 ml-4 mr-2" />

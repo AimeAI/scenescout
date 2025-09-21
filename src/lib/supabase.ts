@@ -15,32 +15,36 @@ function isSupabaseConfigured(): boolean {
   )
 }
 
-// Safe Supabase client creation
-let supabase: any = null
+// Singleton Supabase client
+let supabaseInstance: any = null
 
-if (isSupabaseConfigured()) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  supabase = createClient(supabaseUrl, supabaseAnonKey)
-} else {
-  console.warn('Supabase is not properly configured. Using mock data fallback.')
-}
+function getSupabaseClient() {
+  if (supabaseInstance) {
+    return supabaseInstance
+  }
 
-export { supabase }
-
-// Safe client component client creation
-export function createSafeSupabaseClient() {
   if (!isSupabaseConfigured()) {
     console.warn('Supabase is not properly configured. Using mock data fallback.')
     return null
   }
 
   try {
-    return createClientComponentClient()
+    // Use client component client for better integration with Next.js
+    supabaseInstance = createClientComponentClient()
+    console.log('✅ Supabase client created successfully')
+    return supabaseInstance
   } catch (error) {
     console.error('Failed to create Supabase client:', error)
     return null
   }
+}
+
+// Export the singleton instance
+export const supabase = getSupabaseClient()
+
+// Safe client creation function
+export function createSafeSupabaseClient() {
+  return getSupabaseClient()
 }
 
 export function getSupabaseStatus() {
@@ -54,26 +58,34 @@ export function getSupabaseStatus() {
 export interface Event {
   id: string
   title: string
-  description: string
-  venue_id: string
+  description?: string | null
+  venue_id?: string | null
   venue_name?: string
-  city_id: string
+  city_id?: string | null
   city_name?: string
   category: string
-  date: string
-  time?: string
-  end_time?: string
+  subcategory?: string | null
+  date?: string
+  event_date?: string
+  start_time?: string
+  end_time?: string | null
   price?: number
-  currency?: string
-  image_url?: string
-  website_url?: string
-  ticket_url?: string
+  price_min?: number | null
+  price_max?: number | null
+  currency?: string | null
+  image_url?: string | null
+  website_url?: string | null
+  ticket_url?: string | null
   tags?: string[]
-  is_featured: boolean
-  is_approved: boolean
-  created_at: string
-  updated_at: string
-  submitted_by: string
+  is_featured?: boolean
+  is_free?: boolean
+  status?: string
+  created_at?: string
+  updated_at?: string
+  submitted_by?: string
+  source?: string
+  provider?: string
+  external_id?: string
 }
 
 export interface Venue {
@@ -175,9 +187,8 @@ export const eventQueries = {
           city:cities(name, slug)
         )
       `)
-      .eq('is_approved', true)
-      .gte('date', new Date().toISOString().split('T')[0])
-      .order('date', { ascending: true })
+      .neq('status', 'inactive')
+      .order('start_time', { ascending: true })
 
     if (filters.city) {
       query = query.eq('cities.slug', filters.city)
@@ -188,15 +199,15 @@ export const eventQueries = {
     }
     
     if (filters.date_from) {
-      query = query.gte('date', filters.date_from)
+      query = query.gte('start_time', filters.date_from)
     }
     
     if (filters.date_to) {
-      query = query.lte('date', filters.date_to)
+      query = query.lte('start_time', filters.date_to)
     }
     
     if (filters.is_free) {
-      query = query.eq('price', 0)
+      query = query.or('price_min.eq.0,price_min.is.null')
     }
 
     if (filters.limit) {
@@ -233,9 +244,8 @@ export const eventQueries = {
         cities (name, slug)
       `)
       .eq('is_featured', true)
-      .eq('is_approved', true)
-      .gte('date', new Date().toISOString().split('T')[0])
-      .order('date', { ascending: true })
+      .neq('status', 'inactive')
+      .order('start_time', { ascending: true })
       .limit(limit)
   }
 }

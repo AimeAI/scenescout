@@ -24,25 +24,18 @@ pop3_port = 54326
 
 [storage]
 enabled = true
-port = 54327
 file_size_limit = "50MiB"
 
 [auth]
 enabled = true
-port = 54328
 site_url = "http://localhost:3000"
 additional_redirect_urls = ["https://scenescout.app"]
 jwt_expiry = 3600
 enable_signup = true
-enable_email_confirmations = false
-enable_email_autoconfirm = false
-enable_phone_confirmations = false
-enable_phone_autoconfirm = false
 
 [auth.email]
 enable_signup = true
 double_confirm_changes = true
-enable_confirmations = false
 
 [auth.sms]
 enable_signup = false
@@ -141,7 +134,6 @@ skip_nonce_check = false
 
 [edge_runtime]
 enabled = true
-port = 54329
 inspector_port = 54330
 
 # Edge Functions configuration

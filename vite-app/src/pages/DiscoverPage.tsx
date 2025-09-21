@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Filter, Sparkles, TrendingUp, Calendar, MapPin } from 'lucide-react'
-import { useLocalEvents } from '@/hooks/useLocationEvents'
-import { locationService } from '@/services/location.service'
+import { Search, Sparkles, TrendingUp, Calendar, MapPin } from 'lucide-react'
+import { useUserLocation } from '@/hooks/useUserLocation'
+import { useEvents } from '@/hooks/useEvents'
 import { EventCard } from '@/components/events/EventCard'
-import { EventFiltersModal } from '@/components/filters/EventFiltersModal'
+import { EventFilters } from '@/components/filters/EventFilters'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import type { EventCategoryWithAll, EventFilters } from '@/services/events.service'
+import type { EventCategoryWithAll, EventFilters as EventFiltersType } from '@/services/events.service'
 
 const categories: { id: EventCategoryWithAll; label: string; icon: string }[] = [
   { id: 'all', label: 'All Events', icon: '🎉' },
@@ -38,74 +38,25 @@ export function DiscoverPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('relevance')
   const [showFilters, setShowFilters] = useState(false)
-  const [filters, setFilters] = useState<EventFilters>({})
-  const [userLocation, setUserLocation] = useState<string>('')
+  const [filters, setFilters] = useState<EventFiltersType>({})
+  
+  const userLocation = useUserLocation()
 
-  // Get location-based events
-  const { data: allEvents = [], isLoading, error } = useLocalEvents(100) // 100km radius for discover
+  // Build comprehensive filters
+  const eventFilters: EventFiltersType = {
+    ...filters,
+    cityId: userLocation.cityId,
+    search: searchQuery || undefined,
+    categories: selectedCategory === 'all' ? undefined : [selectedCategory as any],
+    sortBy: sortBy as any,
+    limit: 100
+  }
 
-  // Get user location for display
-  useEffect(() => {
-    locationService.getCurrentLocation().then((location) => {
-      setUserLocation(location.city ? `${location.city}, ${location.state}` : 'Your Location')
-    }).catch(() => {
-      setUserLocation('Toronto, ON')
-    })
-  }, [])
+  // Get filtered events
+  const { data: allEvents = [], isLoading, error } = useEvents(eventFilters)
 
-  // Filter and sort events based on criteria
-  const events = allEvents.filter(event => {
-    // Category filter
-    if (selectedCategory !== 'all' && event.category !== selectedCategory) {
-      return false
-    }
-    
-    // Search filter
-    if (searchQuery && !event.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
-        !event.description?.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return false
-    }
-    
-    // Additional filters from modal
-    if (filters.categories?.length && !filters.categories.includes(event.category as any)) {
-      return false
-    }
-    
-    if (filters.dateFrom && event.date < filters.dateFrom) {
-      return false
-    }
-    
-    if (filters.dateTo && event.date > filters.dateTo) {
-      return false
-    }
-    
-    if (filters.isFree && !event.is_free) {
-      return false
-    }
-    
-    if (filters.priceMin && (event.price_min || 0) < filters.priceMin) {
-      return false
-    }
-    
-    if (filters.priceMax && (event.price_max || 0) > filters.priceMax) {
-      return false
-    }
-    
-    return true
-  }).sort((a, b) => {
-    // Sort based on selected criteria
-    switch (sortBy) {
-      case 'date':
-        return new Date(a.date).getTime() - new Date(b.date).getTime()
-      case 'popular':
-        return (b.hotness_score || 0) - (a.hotness_score || 0)
-      case 'distance':
-        // Events are already sorted by distance in useLocalEvents
-        return 0
-      default: // relevance
-        return (b.hotness_score || 0) - (a.hotness_score || 0)
-    }
-  })
+  // Events are already filtered by the API service
+  const events = allEvents
   
   const hasNextPage = false // Since we're not using infinite scroll with local data
   const isFetchingNextPage = false
@@ -135,10 +86,10 @@ export function DiscoverPage() {
               Find the perfect events tailored to your interests and location
             </p>
             
-            {userLocation && (
+            {userLocation.city && (
               <div className="flex items-center justify-center space-x-2 mb-8 text-white/60">
                 <MapPin size={16} className="text-purple-400" />
-                <span>Showing events near {userLocation}</span>
+                <span>Showing events in {userLocation.city}</span>
               </div>
             )}
             
@@ -202,20 +153,13 @@ export function DiscoverPage() {
                 </div>
               </div>
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowFilters(true)}
-                className="text-white/60 hover:text-white"
-              >
-                <Filter size={16} className="mr-2" />
-                More Filters
-                {Object.keys(filters).length > 0 && (
-                  <Badge className="ml-2 bg-purple-600">
-                    {Object.keys(filters).length}
-                  </Badge>
-                )}
-              </Button>
+              <EventFilters
+                filters={filters}
+                onFiltersChange={setFilters}
+                onClear={() => setFilters({})}
+                isOpen={showFilters}
+                onToggle={() => setShowFilters(!showFilters)}
+              />
             </div>
 
             <div className="text-sm text-white/60">
@@ -272,13 +216,6 @@ export function DiscoverPage() {
           </>
         )}
 
-        {/* Filters Modal */}
-        <EventFiltersModal
-          isOpen={showFilters}
-          onClose={() => setShowFilters(false)}
-          onApply={setFilters}
-          currentFilters={filters}
-        />
       </div>
     </div>
   )

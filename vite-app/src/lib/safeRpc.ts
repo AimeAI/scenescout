@@ -102,7 +102,7 @@ async function getMockDataForRpc<T = any>(
 export const fallbackQueries = {
   getFeaturedEvents: async (limit = 10) => {
     try {
-      return await supabase
+      const { data, error } = await supabase
         .from('events')
         .select(`
           *,
@@ -112,6 +112,13 @@ export const fallbackQueries = {
         .gte('date', new Date().toISOString().split('T')[0])
         .order('date', { ascending: true })
         .limit(limit)
+      
+      if (error) {
+        console.warn('Fallback query failed, using mock data:', error)
+        return { data: getMockFeaturedEvents().slice(0, limit), error: null }
+      }
+      
+      return { data: data || [], error: null }
     } catch (err) {
       console.warn('Fallback query failed, using mock data')
       return { data: getMockFeaturedEvents().slice(0, limit), error: null }

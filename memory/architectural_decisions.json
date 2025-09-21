@@ -1,0 +1,148 @@
+{
+  "spawn_architecture": {
+    "timestamp": "2025-09-17T02:14:00.000Z",
+    "architect_agent": "system-architect",
+    "task_id": "architect",
+    "decisions": {
+      "concurrency_model": {
+        "decision": "Worker Threads for CPU-intensive tasks",
+        "rationale": "Provides true parallelism for data processing",
+        "alternative": "Child processes for complete isolation"
+      },
+      "communication_pattern": {
+        "decision": "Event-driven architecture with message passing",
+        "rationale": "Loose coupling, scalability, fault tolerance",
+        "alternative": "Shared memory with locks"
+      },
+      "resource_management": {
+        "decision": "Dynamic worker pool with auto-scaling",
+        "rationale": "Efficient resource utilization, cost optimization",
+        "alternative": "Fixed worker pool"
+      },
+      "failure_handling": {
+        "decision": "Circuit breaker pattern with exponential backoff",
+        "rationale": "Prevents cascade failures, graceful degradation",
+        "alternative": "Simple retry with fixed delay"
+      }
+    },
+    "components": {
+      "spawn_controller": {
+        "purpose": "Central orchestration component that manages the lifecycle of spawned workers",
+        "responsibilities": [
+          "Worker pool management",
+          "Task distribution and load balancing",
+          "Health monitoring and auto-recovery",
+          "Resource allocation and limits"
+        ]
+      },
+      "worker_types": {
+        "discovery_workers": {
+          "purpose": "Scan external APIs for new events",
+          "capabilities": [
+            "API-specific adapters (Eventbrite, Ticketmaster, Yelp, etc.)",
+            "Rate limit management",
+            "Geographic distribution",
+            "Incremental discovery tracking"
+          ]
+        },
+        "ingestion_workers": {
+          "purpose": "Process and normalize discovered events",
+          "capabilities": [
+            "Data validation and sanitization",
+            "Deduplication logic",
+            "Enrichment pipeline",
+            "Batch processing optimization"
+          ]
+        },
+        "processing_workers": {
+          "purpose": "Handle post-ingestion operations",
+          "capabilities": [
+            "Image optimization",
+            "Geocoding and location services",
+            "Category classification",
+            "Quality scoring"
+          ]
+        }
+      },
+      "communication_layer": {
+        "message_queue": {
+          "technology": "Redis Pub/Sub or PostgreSQL LISTEN/NOTIFY",
+          "channels": [
+            "spawn.discovery.{source} - Discovery task distribution",
+            "spawn.ingestion.{batch} - Ingestion task queue", 
+            "spawn.processing.{type} - Processing pipeline",
+            "spawn.control.{command} - Control plane messages"
+          ]
+        },
+        "shared_memory": {
+          "purpose": "High-performance state sharing",
+          "components": [
+            "Worker registry",
+            "Task assignments", 
+            "Performance metrics",
+            "Configuration cache"
+          ]
+        }
+      }
+    },
+    "implementation_files": {
+      "architecture_doc": "/Users/allthishappiness/Documents/scenescout/docs/SPAWN_ARCHITECTURE.md",
+      "implementation_guide": "/Users/allthishappiness/Documents/scenescout/docs/SPAWN_IMPLEMENTATION_GUIDE.md",
+      "data_flow_doc": "/Users/allthishappiness/Documents/scenescout/docs/SPAWN_DATA_FLOW.md"
+    },
+    "performance_considerations": {
+      "bottleneck_prevention": [
+        "Worker pool sizing based on CPU cores",
+        "Connection pooling for database and APIs",
+        "Batch processing for bulk operations",
+        "Caching frequently accessed data"
+      ],
+      "monitoring_metrics": [
+        "Worker utilization rates",
+        "Task completion times",
+        "Queue depths", 
+        "Error rates and types",
+        "API rate limit usage"
+      ],
+      "optimization_strategies": [
+        "Geographic distribution of discovery workers",
+        "Time-based scheduling for off-peak processing",
+        "Adaptive concurrency based on system load",
+        "Incremental processing with checkpoints"
+      ]
+    },
+    "security_considerations": {
+      "worker_isolation": [
+        "Sandboxed execution environment",
+        "Limited filesystem access",
+        "Network access control lists"
+      ],
+      "api_key_management": [
+        "Encrypted storage",
+        "Rotation policies",
+        "Per-worker key allocation"
+      ],
+      "data_protection": [
+        "Input validation",
+        "Output sanitization",
+        "Audit logging"
+      ]
+    },
+    "integration_points": {
+      "external_apis": [
+        "Eventbrite API v3",
+        "Ticketmaster Discovery API", 
+        "Yelp Fusion API",
+        "Google Places API",
+        "Meetup API"
+      ],
+      "internal_systems": [
+        "PostgreSQL database",
+        "Supabase Edge Functions",
+        "Image processing service",
+        "Geocoding service",
+        "Analytics pipeline"
+      ]
+    }
+  }
+}

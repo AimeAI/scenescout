@@ -1,6 +1,7 @@
 import './globals.css'
 import { Inter } from 'next/font/google'
-import { Metadata } from 'next'
+import { Metadata, Viewport } from 'next'
+import { QueryProvider } from '@/providers/QueryProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -8,8 +9,12 @@ export const metadata: Metadata = {
   title: 'SceneScout - Discover Urban Culture & Events',
   description: 'Discover the best events, venues, and cultural experiences in cities worldwide with our Netflix-style interface.',
   keywords: ['events', 'culture', 'cities', 'venues', 'nightlife', 'entertainment', 'streaming', 'discovery'],
+}
+
+export const viewport: Viewport = {
   themeColor: '#000000',
-  viewport: 'width=device-width, initial-scale=1',
+  width: 'device-width',
+  initialScale: 1,
 }
 
 interface RootLayoutProps {
@@ -25,7 +30,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body className={`${inter.className} bg-black text-white antialiased`}>
-        {children}
+        <QueryProvider>
+          {children}
+        </QueryProvider>
       </body>
     </html>
   )
