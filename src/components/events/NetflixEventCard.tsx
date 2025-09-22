@@ -38,7 +38,10 @@ export function NetflixEventCard({
     large: 'aspect-video w-80 h-45'
   }
 
-  const imageSrc = event.image_url ?? '/placeholder-event.jpg'
+  const imageSrc =
+    typeof event.image_url === 'string' && event.image_url.trim().length > 0
+      ? event.image_url.trim()
+      : '/placeholder-event.jpg'
 
   const handleMouseEnter = () => {
     // Delay hover effect to prevent accidental triggers

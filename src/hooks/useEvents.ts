@@ -159,6 +159,9 @@ export function useEventsByCategory(category: EventCategory, userLocation?: { la
         params.append('lat', userLocation.latitude.toString())
         params.append('lng', userLocation.longitude.toString())
         params.append('radius', '100') // 100km radius for category queries
+        console.log(`API call for ${category}:`, `/api/events?${params.toString()}`)
+      } else {
+        console.log(`No location for ${category} query`)
       }
 
       const response = await fetch(`/api/events?${params.toString()}`)

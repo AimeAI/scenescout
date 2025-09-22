@@ -1,17 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSafeSupabaseClient } from '@/lib/supabase'
+import { getServiceSupabaseClient } from '@/lib/supabase-server'
 import { transformEventRow } from '@/lib/event-normalizer'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createSafeSupabaseClient()
-    
-    if (!supabase) {
-      return NextResponse.json(
-        { error: 'Database not configured' },
-        { status: 500 }
-      )
-    }
+    const supabase = getServiceSupabaseClient()
 
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category')
@@ -96,13 +89,17 @@ export async function GET(request: NextRequest) {
     // Apply location-based radius filtering (post-query for accuracy)
     if (lat && lng) {
       events = events.filter(event => {
-        if (!event.venue?.latitude || !event.venue?.longitude) return false
+        // Check both direct coordinates and venue coordinates
+        const eventLat = event.latitude || event.venue?.latitude
+        const eventLng = event.longitude || event.venue?.longitude
+        
+        if (!eventLat || !eventLng) return false
         
         const distance = calculateDistance(
           parseFloat(lat),
           parseFloat(lng),
-          event.venue.latitude,
-          event.venue.longitude
+          eventLat,
+          eventLng
         )
         
         return distance <= radius
@@ -110,14 +107,15 @@ export async function GET(request: NextRequest) {
       
       // Sort by distance from user
       events.sort((a, b) => {
-        const distA = calculateDistance(
-          parseFloat(lat), parseFloat(lng),
-          a.venue!.latitude!, a.venue!.longitude!
-        )
-        const distB = calculateDistance(
-          parseFloat(lat), parseFloat(lng),
-          b.venue!.latitude!, b.venue!.longitude!
-        )
+        const aLat = a.latitude || a.venue?.latitude
+        const aLng = a.longitude || a.venue?.longitude
+        const bLat = b.latitude || b.venue?.latitude
+        const bLng = b.longitude || b.venue?.longitude
+        
+        if (!aLat || !aLng || !bLat || !bLng) return 0
+        
+        const distA = calculateDistance(parseFloat(lat), parseFloat(lng), aLat, aLng)
+        const distB = calculateDistance(parseFloat(lat), parseFloat(lng), bLat, bLng)
         return distA - distB
       })
     }
@@ -132,10 +130,11 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Only return events with valid venue data (no mock data)
+    // Only return events with valid location data (no mock data)
     events = events.filter(event => {
-      return event.venue?.latitude && 
-             event.venue?.longitude && 
+      const hasLocation = (event.latitude && event.longitude) || 
+                         (event.venue?.latitude && event.venue?.longitude)
+      return hasLocation && 
              event.source !== 'mock' &&
              !event.id.startsWith('mock-')
     })

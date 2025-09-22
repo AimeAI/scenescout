@@ -1,0 +1,283 @@
+# ========================================
+# SCENESCOUT PRODUCTION ENVIRONMENT CONFIGURATION
+# Copy this file and set values in your production environment
+# ========================================
+
+# ========================================
+# SUPABASE PRODUCTION CONFIGURATION
+# ========================================
+
+NEXT_PUBLIC_SUPABASE_URL=https://your-prod-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_production_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_production_service_role_key
+SUPABASE_DB_URL=postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres
+
+# ========================================
+# PRODUCTION API KEYS
+# ========================================
+
+# Eventbrite Production API
+EVENTBRITE_API_KEY=your_production_eventbrite_api_key
+EVENTBRITE_PRIVATE_TOKEN=your_production_eventbrite_private_token
+EVENTBRITE_PUBLIC_TOKEN=your_production_eventbrite_public_token
+EVENTBRITE_CLIENT_SECRET=your_production_eventbrite_client_secret
+EVENTBRITE_TOKEN=your_production_eventbrite_oauth_token
+
+# Ticketmaster Production API
+TICKETMASTER_API_KEY=your_production_ticketmaster_api_key
+TICKETMASTER_API_SECRET=your_production_ticketmaster_api_secret
+TICKETMASTER_CONSUMER_KEY=your_production_ticketmaster_consumer_key
+TICKETMASTER_CONSUMER_SECRET=your_production_ticketmaster_consumer_secret
+
+# Google Services Production API
+GOOGLE_PLACES_API_KEY=your_production_google_places_api_key
+GOOGLE_MAPS_API_KEY=your_production_google_maps_api_key
+GOOGLE_GEOCODING_API_KEY=your_production_google_geocoding_api_key
+GOOGLE_CALENDAR_API_KEY=your_production_google_calendar_api_key
+
+# Yelp Production API
+YELP_API_KEY=your_production_yelp_api_key
+YELP_CLIENT_ID=your_production_yelp_client_id
+YELP_CLIENT_SECRET=your_production_yelp_client_secret
+
+# Social Media APIs
+MEETUP_API_KEY=your_production_meetup_api_key
+SONGKICK_API_KEY=your_production_songkick_api_key
+FACEBOOK_ACCESS_TOKEN=your_production_facebook_access_token
+FACEBOOK_APP_ID=your_production_facebook_app_id
+FACEBOOK_APP_SECRET=your_production_facebook_app_secret
+INSTAGRAM_ACCESS_TOKEN=your_production_instagram_access_token
+TWITTER_BEARER_TOKEN=your_production_twitter_bearer_token
+
+# ========================================
+# PRODUCTION SCRAPING CONFIGURATION
+# ========================================
+
+# Rate Limiting - More conservative for production
+SCRAPE_RATE_LIMIT_RPM=20
+SCRAPE_DELAY_BETWEEN_REQUESTS=3000
+SCRAPE_MAX_CONCURRENT_REQUESTS=3
+SCRAPE_RESPECT_ROBOTS_TXT=true
+SCRAPE_RETRY_ATTEMPTS=5
+SCRAPE_RETRY_DELAY=10000
+
+# Proxy Configuration for Production
+SCRAPE_USE_PROXY=true
+SCRAPE_PROXY_URL=https://premium-proxy.example.com:8080
+SCRAPE_PROXY_USERNAME=production_proxy_username
+SCRAPE_PROXY_PASSWORD=production_proxy_password
+SCRAPE_PROXY_ROTATION=true
+
+# User Agent Configuration
+SCRAPE_USER_AGENT=SceneScout/1.0 (+https://scenescout.app; compliance@scenescout.app)
+SCRAPE_ROTATE_USER_AGENTS=true
+SCRAPE_STEALTH_MODE=true
+
+# Production Timeouts - More generous
+SCRAPE_REQUEST_TIMEOUT=45000
+SCRAPE_PAGE_LOAD_TIMEOUT=90000
+SCRAPE_ELEMENT_WAIT_TIMEOUT=15000
+SCRAPE_NAVIGATION_TIMEOUT=60000
+
+# Browser Configuration
+SCRAPE_HEADLESS=true
+SCRAPE_JAVASCRIPT_ENABLED=true
+SCRAPE_IMAGES_ENABLED=false
+SCRAPE_CSS_ENABLED=false
+SCRAPE_BROWSER_POOL_SIZE=5
+
+# Session Management
+SCRAPE_SESSION_PERSISTENCE=true
+SCRAPE_COOKIE_PERSISTENCE=true
+SCRAPE_CACHE_RESPONSES=true
+SCRAPE_CACHE_TTL=7200
+
+# ========================================
+# PRODUCTION SECURITY
+# ========================================
+
+# Environment
+NODE_ENV=production
+NEXT_PUBLIC_BASE_URL=https://scenescout.app
+
+# Security Headers
+API_SECURITY_HEADERS_ENABLED=true
+API_RATE_LIMIT_WINDOW=3600000
+API_RATE_LIMIT_MAX_REQUESTS=500
+API_CORS_ORIGIN=https://scenescout.app
+
+# Authentication & JWT
+JWT_SECRET=your_production_jwt_secret_256_bit_key
+JWT_EXPIRES_IN=8h
+AUTH_COOKIE_SECURE=true
+AUTH_COOKIE_SAME_SITE=strict
+
+# Webhook Security
+WEBHOOK_SECRET=your_production_webhook_secret
+EVENTBRITE_WEBHOOK_SECRET=your_production_eventbrite_webhook_secret
+TICKETMASTER_WEBHOOK_SECRET=your_production_ticketmaster_webhook_secret
+INTERNAL_WEBHOOK_SECRET=your_production_internal_webhook_secret
+
+# Encryption
+ENCRYPTION_KEY=your_production_encryption_key_256_bit
+DATA_ENCRYPTION_ENABLED=true
+
+# ========================================
+# PRODUCTION MONITORING
+# ========================================
+
+# Logging
+LOG_LEVEL=error
+LOG_FORMAT=json
+LOG_FILE_PATH=/var/log/scenescout/scraping.log
+LOG_MAX_FILE_SIZE=100MB
+LOG_MAX_FILES=20
+LOG_COMPRESS_OLD_FILES=true
+
+# Sentry Production
+SENTRY_DSN=your_production_sentry_dsn
+SENTRY_ENVIRONMENT=production
+SENTRY_SAMPLE_RATE=0.05
+
+# Monitoring
+MONITORING_ENABLED=true
+METRICS_COLLECTION_INTERVAL=30000
+PERFORMANCE_TRACKING_ENABLED=true
+ERROR_TRACKING_ENABLED=true
+
+# Alerting
+ALERT_WEBHOOK_URL=your_production_slack_webhook_url
+ALERT_EMAIL_RECIPIENT=alerts@scenescout.app
+ALERT_ERROR_THRESHOLD=5
+ALERT_PERFORMANCE_THRESHOLD=3000
+
+# ========================================
+# PRODUCTION CACHE
+# ========================================
+
+# Redis Production
+REDIS_URL=rediss://user:password@production-redis.example.com:6380
+REDIS_PASSWORD=your_production_redis_password
+REDIS_DB=0
+REDIS_KEY_PREFIX=scenescout:prod:
+REDIS_TTL=7200
+
+# Memory Cache
+MEMORY_CACHE_ENABLED=true
+MEMORY_CACHE_MAX_SIZE=500MB
+MEMORY_CACHE_TTL=3600
+
+# File Cache
+FILE_CACHE_ENABLED=true
+FILE_CACHE_DIR=/var/cache/scenescout
+FILE_CACHE_MAX_SIZE=5GB
+FILE_CACHE_CLEANUP_INTERVAL=1800000
+
+# ========================================
+# PRODUCTION SERVICES
+# ========================================
+
+# Stripe Production
+STRIPE_SECRET_KEY=sk_live_your_production_stripe_secret_key
+STRIPE_WEBHOOK_SECRET=whsec_your_production_stripe_webhook_secret
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_your_production_stripe_publishable_key
+NEXT_PUBLIC_STRIPE_PRICE_ID=price_your_production_price_id
+STRIPE_ENDPOINT_SECRET=your_production_stripe_endpoint_secret
+
+# Resend Production
+RESEND_API_KEY=re_your_production_resend_api_key
+RESEND_FROM_EMAIL=noreply@scenescout.app
+RESEND_REPLY_TO_EMAIL=support@scenescout.app
+
+# OpenAI Production
+OPENAI_API_KEY=sk-your_production_openai_api_key
+OPENAI_MODEL=gpt-4
+OPENAI_MAX_TOKENS=500
+OPENAI_TEMPERATURE=0.5
+
+# ========================================
+# PRODUCTION IMAGE PROCESSING
+# ========================================
+
+IMAGE_PROCESSING_ENABLED=true
+IMAGE_OPTIMIZATION_QUALITY=85
+IMAGE_MAX_WIDTH=1600
+IMAGE_MAX_HEIGHT=1200
+IMAGE_CLOUDINARY_CLOUD_NAME=your_production_cloudinary_name
+IMAGE_CLOUDINARY_API_KEY=your_production_cloudinary_api_key
+IMAGE_CLOUDINARY_API_SECRET=your_production_cloudinary_api_secret
+
+# ========================================
+# PRODUCTION OAUTH
+# ========================================
+
+# GitHub OAuth Production
+GITHUB_CLIENT_ID=your_production_github_client_id
+GITHUB_CLIENT_SECRET=your_production_github_client_secret
+GITHUB_CALLBACK_URL=https://scenescout.app/auth/github/callback
+
+# Google OAuth Production
+GOOGLE_CLIENT_ID=your_production_google_oauth_client_id
+GOOGLE_CLIENT_SECRET=your_production_google_oauth_client_secret
+GOOGLE_CALLBACK_URL=https://scenescout.app/auth/google/callback
+
+# ========================================
+# PRODUCTION ANALYTICS
+# ========================================
+
+NEXT_PUBLIC_GA_TRACKING_ID=G-YOUR_PRODUCTION_GA_ID
+NEXT_PUBLIC_GTM_ID=GTM-YOUR_PRODUCTION_GTM_ID
+NEXT_PUBLIC_MIXPANEL_TOKEN=your_production_mixpanel_token
+MIXPANEL_SECRET=your_production_mixpanel_secret
+NEXT_PUBLIC_POSTHOG_KEY=phc_your_production_posthog_key
+NEXT_PUBLIC_POSTHOG_HOST=https://app.posthog.com
+
+# ========================================
+# PRODUCTION COMPLIANCE
+# ========================================
+
+GDPR_COMPLIANCE_ENABLED=true
+CCPA_COMPLIANCE_ENABLED=true
+DATA_RETENTION_DAYS=365
+ANONYMIZATION_ENABLED=true
+COOKIE_CONSENT_REQUIRED=true
+COOKIE_CONSENT_BANNER_ENABLED=true
+
+# ========================================
+# PRODUCTION BACKUP
+# ========================================
+
+BACKUP_ENABLED=true
+BACKUP_SCHEDULE=0 3 * * *
+BACKUP_RETENTION_DAYS=90
+BACKUP_STORAGE_TYPE=s3
+BACKUP_S3_BUCKET=scenescout-production-backups
+BACKUP_S3_REGION=us-east-1
+BACKUP_S3_ACCESS_KEY=your_production_s3_access_key
+BACKUP_S3_SECRET_KEY=your_production_s3_secret_key
+
+# ========================================
+# PRODUCTION FEATURE FLAGS
+# ========================================
+
+FEATURE_REAL_TIME_ENABLED=true
+FEATURE_PERSONALIZATION_ENABLED=true
+FEATURE_PREMIUM_FEATURES_ENABLED=true
+FEATURE_ANALYTICS_ENABLED=true
+FEATURE_A_B_TESTING_ENABLED=true
+
+# ========================================
+# PRODUCTION PERFORMANCE
+# ========================================
+
+# Data Processing
+DATA_QUALITY_MIN_SCORE=0.8
+DATA_VALIDATION_STRICT_MODE=true
+DATA_DEDUPLICATION_ENABLED=true
+DATA_ENRICHMENT_ENABLED=true
+
+# Geocoding
+GEOCODING_PROVIDER=google
+GEOCODING_BATCH_SIZE=25
+GEOCODING_CACHE_ENABLED=true
+GEOCODING_FALLBACK_PROVIDER=nominatim

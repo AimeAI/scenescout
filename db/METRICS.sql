@@ -246,6 +246,266 @@ ALTER TABLE notification_metrics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ab_test_results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE error_logs ENABLE ROW LEVEL SECURITY;
 
+-- Scraping system monitoring tables
+CREATE TABLE scraping_job_metrics (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    job_id VARCHAR(100) NOT NULL,
+    source VARCHAR(50) NOT NULL, -- eventbrite, facebook, yelp, etc.
+    status VARCHAR(20) NOT NULL, -- running, completed, failed, cancelled
+    start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    end_time TIMESTAMP WITH TIME ZONE,
+    events_discovered INTEGER DEFAULT 0,
+    events_processed INTEGER DEFAULT 0,
+    events_saved INTEGER DEFAULT 0,
+    duplicates_found INTEGER DEFAULT 0,
+    errors_count INTEGER DEFAULT 0,
+    processing_time_ms INTEGER,
+    memory_usage_mb NUMERIC,
+    cpu_usage_percent NUMERIC,
+    success_rate NUMERIC(5,2),
+    error_details JSONB DEFAULT '{}',
+    performance_stats JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Edge function execution metrics
+CREATE TABLE edge_function_metrics (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    function_name VARCHAR(100) NOT NULL,
+    execution_id VARCHAR(100),
+    invocation_count INTEGER DEFAULT 0,
+    success_count INTEGER DEFAULT 0,
+    error_count INTEGER DEFAULT 0,
+    avg_duration_ms NUMERIC,
+    max_duration_ms INTEGER,
+    min_duration_ms INTEGER,
+    memory_used_mb NUMERIC,
+    timeout_count INTEGER DEFAULT 0,
+    date DATE NOT NULL DEFAULT CURRENT_DATE,
+    hour INTEGER NOT NULL DEFAULT EXTRACT(HOUR FROM NOW()),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(function_name, date, hour)
+);
+
+-- Data quality monitoring
+CREATE TABLE data_quality_metrics (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source VARCHAR(50) NOT NULL,
+    metric_type VARCHAR(50) NOT NULL, -- completeness, accuracy, consistency, validity
+    score NUMERIC(5,2) NOT NULL, -- 0-100
+    total_records INTEGER NOT NULL,
+    passed_records INTEGER NOT NULL,
+    failed_records INTEGER NOT NULL,
+    failure_reasons JSONB DEFAULT '{}',
+    measured_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Real-time system monitoring
+CREATE TABLE realtime_metrics (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    metric_name VARCHAR(100) NOT NULL,
+    metric_value NUMERIC NOT NULL,
+    metric_unit VARCHAR(20), -- ms, percent, count, bytes
+    labels JSONB DEFAULT '{}',
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- System health checks
+CREATE TABLE health_check_results (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    component VARCHAR(50) NOT NULL, -- database, api, scraper, pipeline
+    status VARCHAR(20) NOT NULL, -- healthy, degraded, unhealthy
+    response_time_ms INTEGER,
+    error_message TEXT,
+    details JSONB DEFAULT '{}',
+    check_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Alert history
+CREATE TABLE alert_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    alert_type VARCHAR(50) NOT NULL,
+    severity VARCHAR(20) NOT NULL, -- low, medium, high, critical
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    source_metric VARCHAR(100),
+    threshold_value NUMERIC,
+    actual_value NUMERIC,
+    triggered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMP WITH TIME ZONE,
+    notification_channels JSONB DEFAULT '[]',
+    metadata JSONB DEFAULT '{}'
+);
+
+-- Cache performance metrics
+CREATE TABLE cache_metrics (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    cache_type VARCHAR(50) NOT NULL, -- redis, memory, database
+    operation VARCHAR(20) NOT NULL, -- get, set, delete, hit, miss
+    count INTEGER DEFAULT 0,
+    avg_response_time_ms NUMERIC,
+    hit_rate NUMERIC(5,2),
+    memory_usage_mb NUMERIC,
+    date DATE NOT NULL DEFAULT CURRENT_DATE,
+    hour INTEGER NOT NULL DEFAULT EXTRACT(HOUR FROM NOW()),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(cache_type, operation, date, hour)
+);
+
+-- API endpoint monitoring
+CREATE TABLE api_endpoint_metrics (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    endpoint VARCHAR(255) NOT NULL,
+    method VARCHAR(10) NOT NULL,
+    status_code INTEGER NOT NULL,
+    response_time_ms INTEGER NOT NULL,
+    request_size_bytes INTEGER,
+    response_size_bytes INTEGER,
+    user_agent TEXT,
+    ip_address INET,
+    error_message TEXT,
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Database query performance
+CREATE TABLE query_performance_metrics (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    query_hash VARCHAR(64) NOT NULL,
+    query_text TEXT,
+    execution_time_ms NUMERIC NOT NULL,
+    rows_returned INTEGER,
+    rows_examined INTEGER,
+    connection_id VARCHAR(100),
+    database_name VARCHAR(50),
+    executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for monitoring tables
+CREATE INDEX idx_scraping_job_metrics_source_status ON scraping_job_metrics(source, status);
+CREATE INDEX idx_scraping_job_metrics_start_time ON scraping_job_metrics(start_time DESC);
+CREATE INDEX idx_edge_function_metrics_function_date ON edge_function_metrics(function_name, date DESC);
+CREATE INDEX idx_data_quality_metrics_source_type ON data_quality_metrics(source, metric_type);
+CREATE INDEX idx_realtime_metrics_name_timestamp ON realtime_metrics(metric_name, timestamp DESC);
+CREATE INDEX idx_health_check_component_time ON health_check_results(component, check_time DESC);
+CREATE INDEX idx_alert_history_type_triggered ON alert_history(alert_type, triggered_at DESC);
+CREATE INDEX idx_cache_metrics_type_date ON cache_metrics(cache_type, date DESC);
+CREATE INDEX idx_api_endpoint_metrics_endpoint_timestamp ON api_endpoint_metrics(endpoint, timestamp DESC);
+CREATE INDEX idx_query_performance_hash_time ON query_performance_metrics(query_hash, executed_at DESC);
+
+-- Materialized views for dashboard queries
+CREATE MATERIALIZED VIEW scraping_dashboard_summary AS
+SELECT 
+    source,
+    COUNT(*) as total_jobs,
+    COUNT(*) FILTER (WHERE status = 'completed') as completed_jobs,
+    COUNT(*) FILTER (WHERE status = 'failed') as failed_jobs,
+    AVG(success_rate) as avg_success_rate,
+    SUM(events_saved) as total_events_saved,
+    AVG(processing_time_ms) as avg_processing_time_ms
+FROM scraping_job_metrics 
+WHERE start_time >= NOW() - INTERVAL '24 hours'
+GROUP BY source;
+
+CREATE MATERIALIZED VIEW system_health_summary AS
+SELECT 
+    component,
+    COUNT(*) as total_checks,
+    COUNT(*) FILTER (WHERE status = 'healthy') as healthy_checks,
+    COUNT(*) FILTER (WHERE status = 'degraded') as degraded_checks,
+    COUNT(*) FILTER (WHERE status = 'unhealthy') as unhealthy_checks,
+    AVG(response_time_ms) as avg_response_time,
+    MAX(check_time) as last_check_time
+FROM health_check_results 
+WHERE check_time >= NOW() - INTERVAL '1 hour'
+GROUP BY component;
+
+-- Functions for monitoring automation
+CREATE OR REPLACE FUNCTION record_scraping_job_metric(
+    p_job_id VARCHAR(100),
+    p_source VARCHAR(50),
+    p_status VARCHAR(20),
+    p_events_discovered INTEGER DEFAULT 0,
+    p_events_processed INTEGER DEFAULT 0,
+    p_events_saved INTEGER DEFAULT 0,
+    p_duplicates_found INTEGER DEFAULT 0,
+    p_errors_count INTEGER DEFAULT 0,
+    p_processing_time_ms INTEGER DEFAULT NULL,
+    p_performance_stats JSONB DEFAULT '{}'
+)
+RETURNS UUID AS $$
+DECLARE
+    metric_id UUID;
+    success_rate NUMERIC;
+BEGIN
+    -- Calculate success rate
+    IF p_events_processed > 0 THEN
+        success_rate := (p_events_saved::NUMERIC / p_events_processed::NUMERIC) * 100;
+    ELSE
+        success_rate := 0;
+    END IF;
+    
+    INSERT INTO scraping_job_metrics (
+        job_id, source, status, start_time, end_time,
+        events_discovered, events_processed, events_saved,
+        duplicates_found, errors_count, processing_time_ms,
+        success_rate, performance_stats
+    ) VALUES (
+        p_job_id, p_source, p_status, NOW(), 
+        CASE WHEN p_status IN ('completed', 'failed', 'cancelled') THEN NOW() ELSE NULL END,
+        p_events_discovered, p_events_processed, p_events_saved,
+        p_duplicates_found, p_errors_count, p_processing_time_ms,
+        success_rate, p_performance_stats
+    )
+    ON CONFLICT (job_id) DO UPDATE SET
+        status = EXCLUDED.status,
+        end_time = EXCLUDED.end_time,
+        events_discovered = EXCLUDED.events_discovered,
+        events_processed = EXCLUDED.events_processed,
+        events_saved = EXCLUDED.events_saved,
+        duplicates_found = EXCLUDED.duplicates_found,
+        errors_count = EXCLUDED.errors_count,
+        processing_time_ms = EXCLUDED.processing_time_ms,
+        success_rate = EXCLUDED.success_rate,
+        performance_stats = EXCLUDED.performance_stats
+    RETURNING id INTO metric_id;
+    
+    RETURN metric_id;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION record_health_check(
+    p_component VARCHAR(50),
+    p_status VARCHAR(20),
+    p_response_time_ms INTEGER DEFAULT NULL,
+    p_error_message TEXT DEFAULT NULL,
+    p_details JSONB DEFAULT '{}'
+)
+RETURNS UUID AS $$
+DECLARE
+    check_id UUID;
+BEGIN
+    INSERT INTO health_check_results (
+        component, status, response_time_ms, error_message, details
+    ) VALUES (
+        p_component, p_status, p_response_time_ms, p_error_message, p_details
+    )
+    RETURNING id INTO check_id;
+    
+    RETURN check_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to refresh materialized views
+CREATE OR REPLACE FUNCTION refresh_monitoring_views()
+RETURNS void AS $$
+BEGIN
+    REFRESH MATERIALIZED VIEW CONCURRENTLY scraping_dashboard_summary;
+    REFRESH MATERIALIZED VIEW CONCURRENTLY system_health_summary;
+    REFRESH MATERIALIZED VIEW CONCURRENTLY popular_events_last_7_days;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Only admins can view metrics
 CREATE POLICY metrics_admin_only ON daily_active_users FOR ALL USING (is_admin(auth.uid()));
 CREATE POLICY event_engagement_admin_only ON event_engagement_metrics FOR ALL USING (is_admin(auth.uid()));
@@ -259,3 +519,12 @@ CREATE POLICY revenue_metrics_admin_only ON revenue_metrics FOR ALL USING (is_ad
 CREATE POLICY notification_metrics_admin_only ON notification_metrics FOR ALL USING (is_admin(auth.uid()));
 CREATE POLICY ab_test_admin_only ON ab_test_results FOR ALL USING (is_admin(auth.uid()));
 CREATE POLICY error_logs_admin_only ON error_logs FOR ALL USING (is_admin(auth.uid()));
+CREATE POLICY scraping_job_metrics_admin_only ON scraping_job_metrics FOR ALL USING (is_admin(auth.uid()));
+CREATE POLICY edge_function_metrics_admin_only ON edge_function_metrics FOR ALL USING (is_admin(auth.uid()));
+CREATE POLICY data_quality_metrics_admin_only ON data_quality_metrics FOR ALL USING (is_admin(auth.uid()));
+CREATE POLICY realtime_metrics_admin_only ON realtime_metrics FOR ALL USING (is_admin(auth.uid()));
+CREATE POLICY health_check_results_admin_only ON health_check_results FOR ALL USING (is_admin(auth.uid()));
+CREATE POLICY alert_history_admin_only ON alert_history FOR ALL USING (is_admin(auth.uid()));
+CREATE POLICY cache_metrics_admin_only ON cache_metrics FOR ALL USING (is_admin(auth.uid()));
+CREATE POLICY api_endpoint_metrics_admin_only ON api_endpoint_metrics FOR ALL USING (is_admin(auth.uid()));
+CREATE POLICY query_performance_metrics_admin_only ON query_performance_metrics FOR ALL USING (is_admin(auth.uid()));

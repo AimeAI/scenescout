@@ -79,7 +79,18 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_key
 ```
 
-## Step 5: Test Ingestion
+## Step 5: Verify Application Pipeline
+
+Before triggering ingestion, confirm the application can reach Supabase using the service-role credentials:
+
+```bash
+npm run check
+curl "http://localhost:3000/api/events?limit=1"
+```
+
+The `check` script runs linting and type checks with the new ESLint baseline. The curl request should return live data (or an empty array) without errors.
+
+## Step 6: Test Ingestion
 
 ### Option A: Using the Admin UI
 1. Navigate to http://localhost:3000/admin/ingestion
@@ -107,7 +118,7 @@ curl -X POST 'http://localhost:54321/functions/v1/ingest_eventbrite' \
   -d '{"location":"Toronto","limit":50}'
 ```
 
-## Step 6: Remove Mock Data (Optional) ✅
+## Step 7: Remove Mock Data (Optional) ✅
 
 Once real data is flowing:
 

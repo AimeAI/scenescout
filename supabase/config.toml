@@ -167,6 +167,25 @@ verify_jwt = false
 [functions.hotness_ml]
 verify_jwt = false
 
+# New scheduled scraping functions
+[functions.scheduled-scraper]
+verify_jwt = false
+
+[functions.city-scraper]
+verify_jwt = false
+
+[functions.venue-scraper]
+verify_jwt = false
+
+[functions.webhook-handler]
+verify_jwt = false
+
+[functions.health-check]
+verify_jwt = false
+
+[functions.rpc-functions]
+verify_jwt = false
+
 [analytics]
 enabled = false
 port = 54327
@@ -191,3 +210,8 @@ ip_version = "IPv4"
 # GITHUB_CLIENT_SECRET=your_github_client_secret
 # GOOGLE_CLIENT_ID=your_google_client_id
 # GOOGLE_CLIENT_SECRET=your_google_client_secret
+
+# Webhook secrets for scheduled scraping
+# EVENTBRITE_WEBHOOK_SECRET=your_eventbrite_webhook_secret
+# TICKETMASTER_WEBHOOK_SECRET=your_ticketmaster_webhook_secret
+# INTERNAL_WEBHOOK_SECRET=your_internal_webhook_secret

@@ -106,6 +106,18 @@ export function FeaturedBanner({
 
   if (!currentEvent) return null
 
+  const resolveImageSrc = () => {
+    const candidates = [currentEvent.banner_image_url, currentEvent.image_url]
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string' && candidate.trim().length > 0) {
+        return candidate.trim()
+      }
+    }
+    return '/placeholder-event.jpg'
+  }
+
+  const heroImageSrc = resolveImageSrc()
+
   return (
     <div className={cn("relative w-full h-[60vh] lg:h-[80vh] overflow-hidden", className)}>
       {/* Background Media */}
@@ -132,7 +144,7 @@ export function FeaturedBanner({
               isVideoPlaying ? "opacity-0" : "opacity-100"
             )}>
               <Image
-                src={currentEvent.banner_image_url || currentEvent.image_url || '/placeholder-event.jpg'}
+                src={heroImageSrc}
                 alt={currentEvent.title}
                 fill
                 className="object-cover"
@@ -142,7 +154,7 @@ export function FeaturedBanner({
           </>
         ) : (
           <Image
-            src={currentEvent.banner_image_url || currentEvent.image_url || '/placeholder-event.jpg'}
+            src={heroImageSrc}
             alt={currentEvent.title}
             fill
             className="object-cover"

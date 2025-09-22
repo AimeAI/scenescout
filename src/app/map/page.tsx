@@ -1,305 +1,337 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import dynamic from 'next/dynamic'
-import { createSafeSupabaseClient } from '@/lib/supabase'
-import { Maximize2, Minimize2, List, Map as MapIcon } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { MapFilters } from '@/components/map/MapFilters'
-import { NetflixEventCard } from '@/components/events/NetflixEventCard'
-import { Event, MapFilter, EventCategory, MapBounds } from '@/types'
-import { filterEventsClientSide, transformEventRow } from '@/lib/event-normalizer'
-
-// Dynamic import for EventMap to avoid SSR issues
-const EventMap = dynamic(() => import('@/components/map/EventMap'), {
-  ssr: false,
-  loading: () => (
-    <div className="w-full h-full bg-gray-900 flex items-center justify-center">
-      <div className="text-white/60">Loading map...</div>
-    </div>
-  )
-})
-
-type ViewMode = 'split' | 'map-only' | 'list-only'
+import { SimpleEventMap } from '@/components/map/SimpleEventMap'
+import { EventGrid } from '@/components/events/EventGrid'
 
 export default function MapPage() {
-  const [events, setEvents] = useState<Event[]>([])
-  const [filteredEvents, setFilteredEvents] = useState<Event[]>([])
+  const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
-  const [viewMode, setViewMode] = useState<ViewMode>('split')
-  const [mapCenter, setMapCenter] = useState<[number, number]>([40.7128, -74.0060]) // Default center
-  const [mapBounds, setMapBounds] = useState<MapBounds | null>(null)
-  const [filters, setFilters] = useState<MapFilter>({
-    categories: [] as EventCategory[],
-    dateRange: { 
-      start: new Date(), 
-      end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) 
-    },
-    priceRange: { min: 0, max: 1000 },
-    isFree: false,
-    showVideoOnly: false,
+  const [filters, setFilters] = useState({
+    category: 'all',
+    time: 'all',
+    price: 'all',
+    radius: 25
   })
-
-  const { location, loading: locationLoading } = useUserLocation()
+  const [userLocation, setUserLocation] = useState({ lat: 43.6532, lng: -79.3832 })
+  const [stats, setStats] = useState(null)
+  const [viewMode, setViewMode] = useState<'map' | 'grid'>('map')
 
   useEffect(() => {
-    if (location) {
-      setMapCenter([location.latitude, location.longitude])
-      fetchEvents(location.latitude, location.longitude)
-    } else {
-      fetchEvents()
+    getUserLocation()
+    loadEvents()
+  }, [])
+
+  useEffect(() => {
+    loadEvents()
+  }, [filters, userLocation])
+
+  const getUserLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          })
+        },
+        (error) => {
+          console.log('Location error:', error)
+          // Keep default Toronto location
+        }
+      )
     }
-  }, [location])
+  }
 
-  useEffect(() => {
-    filterEvents()
-  }, [events, filters, mapBounds])
-
-  const fetchEvents = async (userLat?: number, userLng?: number) => {
+  const loadEvents = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
-
-      // Build API URL with location parameters
-      const params = new URLSearchParams()
-      params.append('limit', '1000')
-      
-      if (userLat && userLng) {
-        params.append('lat', userLat.toString())
-        params.append('lng', userLng.toString())
-        params.append('radius', '100') // 100km radius for map view
-      }
-
-      const response = await fetch(`/api/events?${params.toString()}`)
-      
-      if (!response.ok) {
-        console.error('Failed to fetch events from API:', response.statusText)
-        setEvents([]) // No fallback to mock data
-        return
-      }
-
-      const { events: apiEvents } = await response.json()
-      
-      if (!Array.isArray(apiEvents)) {
-        console.error('Invalid events data format')
-        setEvents([])
-        return
-      }
-
-      // Only use events with valid coordinates - no mock data
-      const eventsWithCoords = apiEvents.filter((event: any) => {
-        const lat = event.venue?.latitude || event.latitude
-        const lng = event.venue?.longitude || event.longitude
-        return lat && lng && !isNaN(lat) && !isNaN(lng) && 
-               event.source !== 'mock' && !event.id.startsWith('mock-')
+      const params = new URLSearchParams({
+        category: filters.category,
+        time: filters.time,
+        price: filters.price,
+        lat: userLocation.lat.toString(),
+        lng: userLocation.lng.toString(),
+        radius: filters.radius.toString(),
+        limit: '100'
       })
 
-      setEvents(eventsWithCoords)
+      const response = await fetch(`/api/events/stored?${params}`)
+      const data = await response.json()
+
+      if (data.success) {
+        setEvents(data.events)
+        setStats(data.stats)
+        console.log(`📍 Loaded ${data.events.length} events for map`)
+      }
     } catch (error) {
-      console.error('Error fetching events:', error)
-      setEvents([])
+      console.error('Failed to load events:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  const filterEvents = () => {
-    let filtered = filterEventsClientSide(events, {
-      categories: filters.categories,
-      dateFrom: filters.dateRange.start.toISOString(),
-      dateTo: filters.dateRange.end.toISOString(),
-      priceMin: filters.priceRange.min > 0 ? filters.priceRange.min : undefined,
-      priceMax: filters.priceRange.max,
-      isFree: filters.isFree,
-    })
-
-    // Video filter
-    if (filters.showVideoOnly) {
-      filtered = filtered.filter(event => event.video_url)
-    }
-
-    // Map bounds filter (only show events visible on map)
-    if (mapBounds) {
-      filtered = filtered.filter(event => {
-        const latitude = event.venue?.latitude ?? null
-        const longitude = event.venue?.longitude ?? null
-        if (latitude == null || longitude == null) return false
-
-        return (
-          latitude >= mapBounds.south &&
-          latitude <= mapBounds.north &&
-          longitude >= mapBounds.west &&
-          longitude <= mapBounds.east
-        )
-      })
-    }
-
-    setFilteredEvents(filtered)
+  const handleFilterChange = (filterType: string, value: string | number) => {
+    setFilters(prev => ({
+      ...prev,
+      [filterType]: value
+    }))
   }
 
-  const handleEventSelect = (event: Event) => {
-    setSelectedEvent(event)
-    
-    // Scroll to event in list if in split view
-    if (viewMode === 'split') {
-      const eventElement = document.getElementById(`event-${event.id}`)
-      if (eventElement) {
-        eventElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  const handleEventClick = (event) => {
+    if (event.external_url) {
+      window.open(event.external_url, '_blank')
+    }
+  }
+
+  const getEventsByCategory = () => {
+    const categories = {}
+    events.forEach(event => {
+      if (!categories[event.category]) {
+        categories[event.category] = []
       }
+      categories[event.category].push(event)
+    })
+    return categories
+  }
+
+  const formatDate = (dateStr: string, timeStr: string) => {
+    try {
+      const date = new Date(dateStr)
+      const today = new Date()
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+
+      if (date.toDateString() === today.toDateString()) {
+        return 'Today'
+      } else if (date.toDateString() === tomorrow.toDateString()) {
+        return 'Tomorrow'
+      } else {
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      }
+    } catch (e) {
+      return dateStr
     }
   }
 
-  const handleMapBoundsChange = (bounds: MapBounds) => {
-    setMapBounds(bounds)
-  }
-
-  // No mock data - removed entirely
+  const eventsByCategory = getEventsByCategory()
 
   return (
     <AppLayout>
-      <div className="h-screen bg-black text-white flex flex-col">
+      <div className="min-h-screen bg-black text-white">
         {/* Header */}
-        <div className="flex-shrink-0 border-b border-white/10 bg-black/50 backdrop-blur-sm">
-          <div className="flex items-center justify-between p-4">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-xl font-bold">Event Map</h1>
-              <span className="text-sm text-white/60">
-                {filteredEvents.length} events found
-              </span>
+        <div className="p-6 border-b border-gray-800">
+          <h1 className="text-3xl font-bold mb-4">🗺️ Event Map & Filters</h1>
+          
+          {/* Filter Controls */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
+            {/* Category Filter */}
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Category</label>
+              <select
+                value={filters.category}
+                onChange={(e) => handleFilterChange('category', e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
+              >
+                <option value="all">All Categories</option>
+                <option value="music">🎵 Music</option>
+                <option value="food">🍽️ Food & Drink</option>
+                <option value="tech">💻 Tech</option>
+                <option value="arts">🎨 Arts</option>
+                <option value="sports">⚽ Sports</option>
+                <option value="social">👥 Social</option>
+              </select>
             </div>
 
-            {/* View Mode Toggle */}
-            <div className="flex items-center space-x-2 bg-white/10 rounded-lg p-1">
-              <button
-                onClick={() => setViewMode('list-only')}
-                className={cn(
-                  "p-2 rounded transition-colors",
-                  viewMode === 'list-only' 
-                    ? "bg-white/20 text-white" 
-                    : "text-white/60 hover:text-white hover:bg-white/10"
-                )}
-                title="List View"
+            {/* Time Filter */}
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">When</label>
+              <select
+                value={filters.time}
+                onChange={(e) => handleFilterChange('time', e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
               >
-                <List size={16} />
-              </button>
-              
-              <button
-                onClick={() => setViewMode('split')}
-                className={cn(
-                  "p-2 rounded transition-colors",
-                  viewMode === 'split' 
-                    ? "bg-white/20 text-white" 
-                    : "text-white/60 hover:text-white hover:bg-white/10"
-                )}
-                title="Split View"
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+              </select>
+            </div>
+
+            {/* Price Filter */}
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Price</label>
+              <select
+                value={filters.price}
+                onChange={(e) => handleFilterChange('price', e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
               >
-                <Maximize2 size={16} />
-              </button>
-              
-              <button
-                onClick={() => setViewMode('map-only')}
-                className={cn(
-                  "p-2 rounded transition-colors",
-                  viewMode === 'map-only' 
-                    ? "bg-white/20 text-white" 
-                    : "text-white/60 hover:text-white hover:bg-white/10"
-                )}
-                title="Map View"
+                <option value="all">All Prices</option>
+                <option value="free">Free Only</option>
+                <option value="paid">Paid Events</option>
+              </select>
+            </div>
+
+            {/* Radius Filter */}
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Radius (km)</label>
+              <select
+                value={filters.radius}
+                onChange={(e) => handleFilterChange('radius', parseInt(e.target.value))}
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white"
               >
-                <MapIcon size={16} />
+                <option value={5}>5 km</option>
+                <option value={10}>10 km</option>
+                <option value={25}>25 km</option>
+                <option value={50}>50 km</option>
+                <option value={100}>100 km</option>
+              </select>
+            </div>
+
+            {/* Refresh Button */}
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">View</label>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setViewMode('map')}
+                  className={`px-3 py-2 rounded text-xs font-semibold ${
+                    viewMode === 'map' 
+                      ? 'bg-orange-600 text-white' 
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  🗺️ Map
+                </button>
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`px-3 py-2 rounded text-xs font-semibold ${
+                    viewMode === 'grid' 
+                      ? 'bg-orange-600 text-white' 
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  📋 Grid
+                </button>
+              </div>
+            </div>
+
+            {/* Refresh Button */}
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Actions</label>
+              <button
+                onClick={loadEvents}
+                disabled={loading}
+                className="w-full bg-orange-600 hover:bg-orange-700 rounded px-3 py-2 font-semibold disabled:opacity-50"
+              >
+                {loading ? 'Loading...' : '🔄 Refresh'}
               </button>
             </div>
           </div>
+
+          {/* Stats */}
+          {stats && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+              <div className="bg-gray-800 rounded p-3">
+                <div className="text-2xl font-bold text-blue-500">{stats.total}</div>
+                <div className="text-xs text-gray-400">Total Events</div>
+              </div>
+              <div className="bg-gray-800 rounded p-3">
+                <div className="text-2xl font-bold text-green-500">{stats.freeEvents}</div>
+                <div className="text-xs text-gray-400">Free Events</div>
+              </div>
+              <div className="bg-gray-800 rounded p-3">
+                <div className="text-2xl font-bold text-purple-500">{stats.paidEvents}</div>
+                <div className="text-xs text-gray-400">Paid Events</div>
+              </div>
+              <div className="bg-gray-800 rounded p-3">
+                <div className="text-2xl font-bold text-orange-500">{events.length}</div>
+                <div className="text-xs text-gray-400">Filtered Results</div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Main Content */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Event List */}
-          {(viewMode === 'split' || viewMode === 'list-only') && (
-            <div className={cn(
-              "bg-gray-900 border-r border-white/10 flex flex-col",
-              viewMode === 'split' ? "w-1/3" : "w-full"
-            )}>
-              {/* Filters */}
-              <div className="flex-shrink-0 p-4">
-                <MapFilters
-                  filters={filters}
-                  onFiltersChange={setFilters}
-                  eventCount={filteredEvents.length}
-                />
-              </div>
-
-              {/* Event List */}
-              <div className="flex-1 overflow-y-auto">
+        {/* Map and Events */}
+        <div className="p-6">
+          {viewMode === 'map' ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Map Area */}
+              <div className="bg-gray-800 rounded-lg p-6 h-96 lg:h-[600px]">
+                <h2 className="text-xl font-semibold mb-4">📍 Event Locations</h2>
+                
                 {loading ? (
-                  <div className="flex items-center justify-center h-64">
-                    <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
+                      <p>Loading events...</p>
+                    </div>
                   </div>
                 ) : (
-                  <div className="p-4 space-y-4">
-                    {filteredEvents.map(event => (
-                      <div
-                        key={event.id}
-                        id={`event-${event.id}`}
-                        className={cn(
-                          "cursor-pointer transition-all duration-200",
-                          selectedEvent?.id === event.id && "ring-2 ring-purple-500"
-                        )}
-                        onClick={() => handleEventSelect(event)}
-                      >
-                        <NetflixEventCard
-                          event={event}
-                          size="medium"
-                          showHoverPreview={false}
-                        />
+                  <div className="h-full">
+                    <SimpleEventMap
+                      events={events}
+                      center={userLocation}
+                      onEventClick={handleEventClick}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Events List */}
+              <div className="space-y-4 h-96 lg:h-[600px] overflow-y-auto">
+                <h2 className="text-xl font-semibold">📋 Filtered Events</h2>
+                
+                {events.length > 0 ? (
+                  events.map((event) => (
+                    <div
+                      key={event.id}
+                      onClick={() => handleEventClick(event)}
+                      className="bg-gray-800 rounded-lg p-4 cursor-pointer hover:bg-gray-700 transition"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className="font-semibold line-clamp-2">{event.title}</h3>
+                        <div className="flex gap-2 ml-2">
+                          {event.price_min === 0 ? (
+                            <span className="bg-green-600 text-white px-2 py-1 rounded text-xs">FREE</span>
+                          ) : (
+                            <span className="bg-blue-600 text-white px-2 py-1 rounded text-xs">${event.price_min}</span>
+                          )}
+                          <span className="bg-gray-600 text-white px-2 py-1 rounded text-xs capitalize">
+                            {event.category}
+                          </span>
+                        </div>
                       </div>
-                    ))}
-                    
-                    {filteredEvents.length === 0 && (
-                      <div className="text-center py-12 text-white/60">
-                        <MapIcon size={48} className="mx-auto mb-4 opacity-30" />
-                        <h3 className="text-lg font-medium mb-2">No events found</h3>
-                        <p className="text-sm">
-                          Try adjusting your filters or zooming out on the map
-                        </p>
+                      
+                      <div className="space-y-1 text-sm text-gray-400">
+                        <div className="flex items-center gap-2">
+                          <span>📍</span>
+                          <span>{event.venue_name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span>📅</span>
+                          <span>{formatDate(event.date, event.time)}</span>
+                        </div>
                       </div>
-                    )}
+                      
+                      <p className="text-sm text-gray-300 mt-2 line-clamp-2">
+                        {event.description}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-12 text-gray-400">
+                    <div className="text-4xl mb-4">🔍</div>
+                    <p>No events found with current filters</p>
+                    <p className="text-sm mt-2">Try adjusting your filters above</p>
                   </div>
                 )}
               </div>
             </div>
-          )}
-
-          {/* Map */}
-          {(viewMode === 'split' || viewMode === 'map-only') && (
-            <div className={cn(
-              "relative",
-              viewMode === 'split' ? "flex-1" : "w-full"
-            )}>
-              <EventMap
-                events={filteredEvents}
-                center={mapCenter}
-                zoom={12}
-                height="100%"
-                onEventSelect={handleEventSelect}
-                onBoundsChange={handleMapBoundsChange}
-                filters={filters}
-                onFiltersChange={setFilters}
-                showFilters={viewMode === 'map-only'}
-                className="w-full h-full"
-              />
-
-              {/* Map-only filters */}
-              {viewMode === 'map-only' && (
-                <div className="absolute top-4 left-4 z-[1000] w-80">
-                  <MapFilters
-                    filters={filters}
-                    onFiltersChange={setFilters}
-                    eventCount={filteredEvents.length}
-                  />
-                </div>
-              )}
+          ) : (
+            <div>
+              <h2 className="text-xl font-semibold mb-4">📋 All Events ({events.length})</h2>
+              <EventGrid events={events} onEventClick={handleEventClick} />
             </div>
           )}
         </div>
