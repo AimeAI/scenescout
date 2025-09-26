@@ -3,6 +3,8 @@ import { LiveEventScraper } from '@/lib/live-scraper'
 import { MultiSourceScraper } from '@/lib/multi-source-scraper'
 import { EventManager } from '@/lib/event-manager'
 
+export const dynamic = 'force-dynamic'
+
 const liveScraper = new LiveEventScraper()
 const multiScraper = new MultiSourceScraper()
 const eventManager = new EventManager()

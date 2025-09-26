@@ -1,5 +1,7 @@
 # Supabase Configuration for SceneScout v14
 
+project_id = "ldgbjmotttuomxzwujrt"
+
 [api]
 enabled = true
 port = 54321
@@ -69,9 +71,9 @@ enable_confirmations = false
 # secret = ""
 
 [auth.external.github]
-enabled = true
-client_id = "env(GITHUB_CLIENT_ID)"
-secret = "env(GITHUB_CLIENT_SECRET)"
+enabled = false
+client_id = ""
+secret = ""
 
 [auth.external.gitlab]
 enabled = false
@@ -80,9 +82,9 @@ secret = ""
 url = ""
 
 [auth.external.google]
-enabled = true
-client_id = "env(GOOGLE_CLIENT_ID)"
-secret = "env(GOOGLE_CLIENT_SECRET)"
+enabled = false
+client_id = ""
+secret = ""
 skip_nonce_check = false
 
 # [auth.external.keycloak]

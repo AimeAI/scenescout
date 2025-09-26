@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabaseClient } from '@/lib/supabase-server'
 import { transformEventRow } from '@/lib/event-normalizer'
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = getServiceSupabaseClient()

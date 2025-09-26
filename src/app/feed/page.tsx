@@ -162,7 +162,7 @@ export default function DiscoverPage() {
             <div className="text-4xl mb-4">😔</div>
             <h3 className="text-xl font-semibold mb-2">No Trending Events Found</h3>
             <p className="text-gray-400 mb-6">
-              We couldn't find any trending events right now. Try refreshing or search manually.
+              We couldn&apos;t find any trending events right now. Try refreshing or search manually.
             </p>
             <button
               onClick={() => window.location.href = '/search'}

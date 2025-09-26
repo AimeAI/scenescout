@@ -1,7 +1,7 @@
 // Direct API ingestion service for real-time data fetching
 import { supabase } from '@/lib/supabase'
 
-const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_PLACES_API_KEY || 'AIzaSyCrsauxxAb2nqLsfhr4UqSeJIFkssLHjNE'
+// Google Places API removed - using alternative data sources
 const YELP_API_KEY = import.meta.env.VITE_YELP_API_KEY || 'tpNEPYv1OdDlphvD--672xPJKCr3KGFNLsJ5Q1Hbq12xA0suztjs8dYxFr_sUGD8a5Pp2fPej32Xeh0uvxh6wYvF2tgAoedhXJ2fNqnrpq4Rme_m6bTptrxuJajHaHYx'
 
 interface LocationBounds {
@@ -35,63 +35,13 @@ class ApiIngestionService {
     }
 
     try {
-      console.log(`🔍 Ingesting venues near ${lat}, ${lng}`)
+      console.log(`🔍 Venue ingestion disabled - Google Places API removed`)
       
-      // Fetch from Google Places nearby search
-      const googleVenues = await this.fetchGooglePlaces(lat, lng, radius)
-      
-      // Insert new venues
-      let insertedCount = 0
-      
-      if (googleVenues.length > 0) {
-        const { data: city } = await supabase
-          .from('cities')
-          .select('id')
-          .eq('slug', 'toronto-on')
-          .single()
-
-        if (city) {
-          for (const venue of googleVenues) {
-            try {
-              // Check if venue already exists
-              const { data: existing } = await supabase
-                .from('venues')
-                .select('id')
-                .eq('external_id', venue.place_id)
-                .single()
-
-              if (!existing) {
-                const { error } = await supabase
-                  .from('venues')
-                  .insert({
-                    name: venue.name,
-                    address: venue.vicinity || venue.formatted_address,
-                    latitude: venue.geometry.location.lat,
-                    longitude: venue.geometry.location.lng,
-                    venue_type: venue.types?.[0] || 'other',
-                    external_id: venue.place_id,
-                    city_id: city.id,
-                    images: venue.photos ? [
-                      `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${venue.photos[0].photo_reference}&key=${GOOGLE_API_KEY}`
-                    ] : []
-                  })
-
-                if (!error) {
-                  insertedCount++
-                }
-              }
-            } catch (err) {
-              console.error('Error inserting venue:', err)
-            }
-          }
-        }
-      }
-
-      // Mark this area as ingested
+      // Mark this area as checked (to prevent repeated attempts)
       this.ingestionCache.set(cacheKey, Date.now())
       
-      console.log(`✅ Ingested ${insertedCount} new venues`)
-      return { success: true, venues: insertedCount }
+      // Return success with 0 venues ingested
+      return { success: true, venues: 0 }
       
     } catch (error) {
       console.error('Ingestion failed:', error)
@@ -99,24 +49,6 @@ class ApiIngestionService {
     }
   }
 
-  private async fetchGooglePlaces(lat: number, lng: number, radius: number) {
-    try {
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=point_of_interest&key=${GOOGLE_API_KEY}`
-      )
-      
-      if (!response.ok) {
-        throw new Error(`Google Places API error: ${response.status}`)
-      }
-      
-      const data = await response.json()
-      return data.results || []
-      
-    } catch (error) {
-      console.error('Google Places fetch failed:', error)
-      return []
-    }
-  }
 
   // Check if we have venues in a given area
   async hasVenuesInArea(lat: number, lng: number, radius: number = 2000): Promise<boolean> {

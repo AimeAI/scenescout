@@ -9,6 +9,8 @@ import { realtimeEventStream } from '@/lib/pipeline/realtime-stream'
 import { dataQualityGates } from '@/lib/pipeline/data-quality-gates'
 import { monitoringSystem } from '@/lib/pipeline/monitoring-system'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/pipeline - Get pipeline status
 export async function GET(request: NextRequest) {
   try {

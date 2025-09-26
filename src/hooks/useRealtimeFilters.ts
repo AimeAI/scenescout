@@ -315,6 +315,7 @@ export function useRealtimeCategoryCounts() {
 
 // Hook for real-time map bounds filtering
 export function useRealtimeMapFilters(initialBounds?: MapBounds) {
+  const queryClient = useQueryClient()
   const [bounds, setBounds] = useState<MapBounds | undefined>(initialBounds)
   const [mapEvents, setMapEvents] = useState<Event[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -334,7 +335,6 @@ export function useRealtimeMapFilters(initialBounds?: MapBounds) {
     setIsLoading(true)
     
     setTimeout(() => {
-      const queryClient = useQueryClient()
       const eventsCache = queryClient.getQueriesData({ queryKey: queryKeys.events })
       const allEvents: Event[] = []
 
@@ -360,7 +360,7 @@ export function useRealtimeMapFilters(initialBounds?: MapBounds) {
       setMapEvents(eventsInBounds)
       setIsLoading(false)
     }, 100)
-  }, [bounds])
+  }, [bounds, queryClient])
 
   useEffect(() => {
     updateMapEvents()

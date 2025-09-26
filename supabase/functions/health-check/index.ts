@@ -45,7 +45,7 @@ class HealthChecker {
     services.push(await this.checkEventbriteAPI())
     services.push(await this.checkTicketmasterAPI()) 
     services.push(await this.checkYelpAPI())
-    services.push(await this.checkGooglePlacesAPI())
+    // Google Places API check removed
     
     // Check Edge Functions
     services.push(await this.checkEdgeFunctions())
@@ -289,52 +289,6 @@ class HealthChecker {
     }
   }
 
-  private async checkGooglePlacesAPI(): Promise<HealthCheckResult> {
-    const startTime = Date.now()
-    
-    try {
-      const apiKey = Deno.env.get('GOOGLE_PLACES_API_KEY')
-      if (!apiKey) {
-        return {
-          component: 'google-places-api',
-          status: 'unhealthy',
-          error: 'API key not configured'
-        }
-      }
-      
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=37.7749,-122.4194&radius=1000&type=establishment&key=${apiKey}`,
-        {
-          signal: AbortSignal.timeout(this.timeout)
-        }
-      )
-      
-      const responseTime = Date.now() - startTime
-      
-      if (!response.ok) {
-        return {
-          component: 'google-places-api',
-          status: response.status === 429 ? 'degraded' : 'unhealthy',
-          responseTime,
-          error: `HTTP ${response.status}`
-        }
-      }
-      
-      return {
-        component: 'google-places-api',
-        status: 'healthy',
-        responseTime
-      }
-      
-    } catch (error) {
-      return {
-        component: 'google-places-api',
-        status: 'unhealthy',
-        responseTime: Date.now() - startTime,
-        error: error.message
-      }
-    }
-  }
 
   private async checkEdgeFunctions(): Promise<HealthCheckResult> {
     const startTime = Date.now()

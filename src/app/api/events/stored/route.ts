@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { LiveEventScraper } from '@/lib/live-scraper'
 
+export const dynamic = 'force-dynamic'
+
 const scraper = new LiveEventScraper()
 
 export async function GET(request: NextRequest) {

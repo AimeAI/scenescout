@@ -6,6 +6,8 @@
 import { NextRequest } from 'next/server'
 import { realtimeEventStream } from '@/lib/pipeline/realtime-stream'
 
+export const dynamic = 'force-dynamic'
+
 // Note: Next.js doesn't have built-in WebSocket support in App Router
 // This is a placeholder showing how the WebSocket integration would work
 // In production, you'd typically use a separate WebSocket server or a service like Pusher

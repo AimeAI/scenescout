@@ -1,6 +1,7 @@
 import axios from 'axios'
 import * as cheerio from 'cheerio'
 import { LinktreeScraper } from './scrapers/linktree-scraper'
+import { scraperHealthChecker } from './scraping/health-check'
 
 interface EventSource {
   name: string
@@ -16,6 +17,9 @@ interface EventSource {
 
 export class MultiSourceScraper {
   private linktreeScraper = new LinktreeScraper()
+  private healthySourcesCache: Set<string> | null = null
+  private healthCheckTimestamp: number = 0
+  private readonly HEALTH_CHECK_INTERVAL = 5 * 60 * 1000 // 5 minutes
   
   private readonly EVENT_SOURCES: Record<string, EventSource[]> = {
     music: [
@@ -222,18 +226,30 @@ export class MultiSourceScraper {
   async scrapeAllSources(query: string, categories: string[] = ['music', 'food', 'tech', 'sports', 'social', 'arts']) {
     console.log(`🔍 Multi-source scraping for: "${query}" across ${categories.length} categories`)
     
+    // Get healthy sources first
+    const healthySources = await this.getHealthySources()
+    console.log(`✅ ${healthySources.length} healthy sources available`)
+    
     const allEvents = []
     
     for (const category of categories) {
       const sources = this.EVENT_SOURCES[category] || []
       
       for (const source of sources) {
+        // Skip unhealthy sources
+        if (!healthySources.has(source.name.toLowerCase())) {
+          console.log(`⏭️ Skipping ${source.name} (unhealthy)`)
+          continue
+        }
+        
         try {
           const events = await this.scrapeSource(source, query, category)
           allEvents.push(...events)
           console.log(`✅ ${source.name}: Found ${events.length} events`)
         } catch (error) {
           console.error(`❌ ${source.name} failed:`, error.message)
+          // Remove from healthy sources cache
+          this.healthySourcesCache?.delete(source.name.toLowerCase())
         }
       }
     }
@@ -263,9 +279,22 @@ export class MultiSourceScraper {
     try {
       const response = await axios.get(source.url, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Cache-Control': 'max-age=0'
         },
-        timeout: 15000
+        timeout: 15000,
+        maxRedirects: 5,
+        validateStatus: function (status) {
+          return status < 500 // Accept any status code less than 500
+        }
       })
 
       const $ = cheerio.load(response.data)
@@ -306,7 +335,26 @@ export class MultiSourceScraper {
         })
       })
     } catch (error) {
-      console.error(`Failed to scrape ${source.name}:`, error.message)
+      if (error.response) {
+        const { status } = error.response
+        if (status === 404) {
+          console.warn(`⚠️ ${source.name}: Page not found (404) - source may have moved`)
+        } else if (status === 403) {
+          console.warn(`⚠️ ${source.name}: Access denied (403) - may require authentication`)
+        } else if (status === 429) {
+          console.warn(`⚠️ ${source.name}: Rate limited (429) - too many requests`)
+        } else if (status >= 400) {
+          console.warn(`⚠️ ${source.name}: HTTP ${status} error`)
+        }
+      } else if (error.code === 'ECONNABORTED') {
+        console.warn(`⚠️ ${source.name}: Request timed out`)
+      } else if (error.code === 'ENOTFOUND') {
+        console.warn(`⚠️ ${source.name}: Domain not found - source may be offline`)
+      } else if (error.code === 'ECONNREFUSED') {
+        console.warn(`⚠️ ${source.name}: Connection refused - source may be down`)
+      } else {
+        console.error(`❌ ${source.name}: Unexpected error - ${error.message}`)
+      }
     }
     
     return events
@@ -319,9 +367,18 @@ export class MultiSourceScraper {
       const searchUrl = `https://www.eventbrite.ca/d/canada--toronto/${encodeURIComponent(query)}/`
       const response = await axios.get(searchUrl, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1'
         },
-        timeout: 15000
+        timeout: 15000,
+        maxRedirects: 5,
+        validateStatus: function (status) {
+          return status < 500 // Accept any status code less than 500
+        }
       })
 
       const $ = cheerio.load(response.data)
@@ -359,7 +416,13 @@ export class MultiSourceScraper {
         })
       })
     } catch (error) {
-      console.error('Eventbrite scraping failed:', error.message)
+      if (error.response) {
+        console.warn(`⚠️ Eventbrite: HTTP ${error.response.status} error - ${error.response.statusText}`)
+      } else if (error.code === 'ECONNABORTED') {
+        console.warn(`⚠️ Eventbrite: Request timed out`)
+      } else {
+        console.error(`❌ Eventbrite scraping failed:`, error.message)
+      }
     }
     
     return events
@@ -498,5 +561,34 @@ export class MultiSourceScraper {
       seen.add(key)
       return true
     })
+  }
+
+  private async getHealthySources(): Promise<Set<string>> {
+    // Return cached results if still fresh
+    if (
+      this.healthySourcesCache &&
+      Date.now() - this.healthCheckTimestamp < this.HEALTH_CHECK_INTERVAL
+    ) {
+      return this.healthySourcesCache
+    }
+
+    try {
+      // Run health check
+      const healthySourceNames = await scraperHealthChecker.getHealthySources()
+      this.healthySourcesCache = new Set(
+        healthySourceNames.map(name => name.toLowerCase())
+      )
+      this.healthCheckTimestamp = Date.now()
+      
+      // Always include Eventbrite as it's our most reliable source
+      this.healthySourcesCache.add('eventbrite')
+      this.healthySourcesCache.add('eventbrite_tech')
+      
+      return this.healthySourcesCache
+    } catch (error) {
+      console.error('Health check failed:', error)
+      // Return default healthy sources on error
+      return new Set(['eventbrite', 'eventbrite_tech', 'blogto_food', 'toronto_com'])
+    }
   }
 }

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { LiveEventScraper } from '@/lib/live-scraper'
 import { EventManager } from '@/lib/event-manager'
 
+export const dynamic = 'force-dynamic'
+
 const scraper = new LiveEventScraper()
 const eventManager = new EventManager()
 

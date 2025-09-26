@@ -38,6 +38,7 @@ const CITY_CATEGORIES = [
   { id: 'books', title: 'Books & Literature', emoji: '📖', query: 'books literature reading clubs' }
 ]
 
+// Fix component name to avoid webpack cache issues
 export default function HomePage() {
   const [categoryEvents, setCategoryEvents] = useState<Record<string, any[]>>({})
   const [loadingCategories, setLoadingCategories] = useState<Record<string, boolean>>({})
@@ -46,45 +47,6 @@ export default function HomePage() {
   const [loadedCategoryCount, setLoadedCategoryCount] = useState(0)
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null)
 
-  useEffect(() => {
-    getUserLocation()
-    loadInitialEvents()
-  }, [])
-
-  const loadMoreCategories = useCallback(async () => {
-    if (loadedCategoryCount >= CITY_CATEGORIES.length) return
-    
-    console.log(`📂 Loading more categories: ${loadedCategoryCount}/${CITY_CATEGORIES.length}`)
-    
-    // Load next 3 categories at once for better UX
-    const nextCategories = CITY_CATEGORIES.slice(loadedCategoryCount, loadedCategoryCount + 3)
-    console.log(`📋 Next categories:`, nextCategories.map(c => c.title))
-    
-    const promises = nextCategories.map(category => 
-      loadCategoryEvents(category.id, category.query, false)
-    )
-    
-    await Promise.all(promises)
-    setLoadedCategoryCount(prev => prev + nextCategories.length)
-    console.log(`✅ Loaded ${nextCategories.length} more categories`)
-  }, [loadedCategoryCount])
-
-  // Infinite scroll effect
-  useEffect(() => {
-    const handleScroll = () => {
-      if (
-        window.innerHeight + document.documentElement.scrollTop
-        >= document.documentElement.offsetHeight - 1000 &&
-        loadedCategoryCount < CITY_CATEGORIES.length &&
-        !initialLoading
-      ) {
-        loadMoreCategories()
-      }
-    }
-
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [loadedCategoryCount, initialLoading, loadMoreCategories])
 
   const getUserLocation = () => {
     if (navigator.geolocation) {
@@ -116,7 +78,7 @@ export default function HomePage() {
     return R * c
   }
 
-  const sortEventsByLocation = (events: any[]) => {
+  const sortEventsByLocation = useCallback((events: any[]) => {
     if (!userLocation) return events
     
     return events.sort((a, b) => {
@@ -130,36 +92,64 @@ export default function HomePage() {
       )
       return distanceA - distanceB
     })
+  }, [userLocation])
+
+
+  // Helper function to remove duplicates
+  const removeDuplicates = (events: any[]) => {
+    const seen = new Set<string>()
+    return events.filter(event => {
+      const key = event.title?.toLowerCase().replace(/[^\w]/g, '') + event.date
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
   }
 
-  const loadInitialEvents = async () => {
-    setInitialLoading(true)
-    
-    // Load first 6 categories with more events each
-    const initialCategories = CITY_CATEGORIES.slice(0, 6)
-    const promises = initialCategories.map(category => 
-      loadCategoryEvents(category.id, category.query, false)
-    )
-    
-    await Promise.all(promises)
-    setLoadedCategoryCount(6)
-    setInitialLoading(false)
-  }
-
-  const loadCategoryEvents = async (categoryId: string, query: string, isLoadMore: boolean) => {
+  // Move loadCategoryEvents function definition to avoid temporal dead zone
+  const loadCategoryEvents = useCallback(async (categoryId: string, query: string, isLoadMore: boolean) => {
     setLoadingCategories(prev => ({ ...prev, [categoryId]: true }))
     
     try {
-      const currentEvents = categoryEvents[categoryId] || []
-      const offset = isLoadMore ? currentEvents.length : 0
-      const limit = 25 // Increased from 15
+      // Use functional update to get current events without dependency
+      let currentEvents: any[] = []
+      let offset = 0
+      
+      setCategoryEvents(prev => {
+        currentEvents = prev[categoryId] || []
+        offset = isLoadMore ? currentEvents.length : 0
+        return prev // Don't update, just read
+      })
+      
+      const limit = 25
       
       console.log(`🔍 Loading ${categoryId}: query="${query}", offset=${offset}, isLoadMore=${isLoadMore}`)
       
-      const response = await fetch(
-        `/api/search-enhanced?q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}`
+      // Try repository first (fast)
+      let response = await fetch(
+        `/api/events/repository?category=${categoryId}&q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}`
       )
-      const data = await response.json()
+      let data = await response.json()
+      
+      // If repository has few events, supplement with live scraping
+      if (data.success && data.events.length < 10 && offset === 0) {
+        console.log(`📡 Repository has ${data.events.length} events, supplementing with live scraping...`)
+        
+        const liveResponse = await fetch(
+          `/api/search-enhanced?q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}`
+        )
+        const liveData = await liveResponse.json()
+        
+        if (liveData.success && liveData.events.length > 0) {
+          // Combine repository + live events
+          const combinedEvents = [...data.events, ...liveData.events]
+          const uniqueEvents = removeDuplicates(combinedEvents)
+          data.events = uniqueEvents
+          data.count = uniqueEvents.length
+          
+          console.log(`🔄 Combined: ${data.events.length} repository + ${liveData.events.length} live = ${uniqueEvents.length} unique`)
+        }
+      }
       
       console.log(`📊 ${categoryId} response:`, { success: data.success, count: data.count, hasMore: data.hasMore })
       
@@ -176,7 +166,7 @@ export default function HomePage() {
         
         setHasMoreCategories(prev => ({
           ...prev,
-          [categoryId]: data.hasMore || (currentEvents.length + data.events.length < 50) // Show more button until we have 50+ events
+          [categoryId]: data.hasMore || (currentEvents.length + data.events.length < 50)
         }))
         
         console.log(`✅ ${categoryId}: Added ${sortedEvents.length} events, total now ${isLoadMore ? currentEvents.length + sortedEvents.length : sortedEvents.length}`)
@@ -196,7 +186,76 @@ export default function HomePage() {
     } finally {
       setLoadingCategories(prev => ({ ...prev, [categoryId]: false }))
     }
+  }, [sortEventsByLocation])
+
+  const loadInitialEvents = async () => {
+    // Fix: Don't block initial load, just prevent duplicates
+    if (initialLoading && Object.keys(categoryEvents).length > 0) return
+    
+    setInitialLoading(true)
+    
+    try {
+      // Load first 6 categories with more events each
+      const initialCategories = CITY_CATEGORIES.slice(0, 6)
+      
+      for (const category of initialCategories) {
+        await loadCategoryEvents(category.id, category.query, false)
+      }
+      
+      setLoadedCategoryCount(6)
+    } catch (error) {
+      console.error('Failed to load initial events:', error)
+    } finally {
+      setInitialLoading(false)
+    }
   }
+
+  const loadMoreCategories = async () => {
+    if (loadedCategoryCount >= CITY_CATEGORIES.length) return
+    
+    console.log(`📂 Loading more categories: ${loadedCategoryCount}/${CITY_CATEGORIES.length}`)
+    
+    // Load next 3 categories at once for better UX
+    const nextCategories = CITY_CATEGORIES.slice(loadedCategoryCount, loadedCategoryCount + 3)
+    console.log(`📋 Next categories:`, nextCategories.map(c => c.title))
+    
+    try {
+      for (const category of nextCategories) {
+        await loadCategoryEvents(category.id, category.query, false)
+      }
+      
+      setLoadedCategoryCount(prev => prev + nextCategories.length)
+      console.log(`✅ Loaded ${nextCategories.length} more categories`)
+    } catch (error) {
+      console.error('Failed to load more categories:', error)
+    }
+  }
+
+  // Initial load effect
+  useEffect(() => {
+    getUserLocation()
+    // Load events immediately on mount, location sorting will happen when available
+    loadInitialEvents()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Infinite scroll effect
+  useEffect(() => {
+    const handleScroll = () => {
+      if (
+        window.innerHeight + document.documentElement.scrollTop
+        >= document.documentElement.offsetHeight - 1000 &&
+        loadedCategoryCount < CITY_CATEGORIES.length &&
+        !initialLoading
+      ) {
+        loadMoreCategories()
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadedCategoryCount, initialLoading])
 
   const handleLoadMoreCategory = (categoryId: string, query: string) => {
     console.log(`🔄 Loading more events for category: ${categoryId}`)

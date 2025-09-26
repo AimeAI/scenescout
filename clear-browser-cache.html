@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Browser Cache Instructions</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .step { background: #f0f0f0; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .urgent { background: #ffebee; border-left: 4px solid #f44336; }
+    </style>
+</head>
+<body>
+    <h1>🔥 URGENT: Clear Browser Cache to Fix OptimalHomepage Error</h1>
+    
+    <div class="urgent step">
+        <h2>❌ Current Issue</h2>
+        <p>Your browser is loading cached JavaScript that contains references to the old <code>OptimalHomepage</code> component that no longer exists. This is causing the "loadCategory" initialization errors.</p>
+    </div>
+
+    <div class="step">
+        <h2>🚀 Solution: Hard Refresh Your Browser</h2>
+        
+        <h3>Method 1: Hard Refresh (Recommended)</h3>
+        <ul>
+            <li><strong>Chrome/Firefox/Safari:</strong> Press <code>Ctrl + Shift + R</code> (Windows) or <code>Cmd + Shift + R</code> (Mac)</li>
+            <li><strong>Alternative:</strong> Hold <code>Shift</code> and click the refresh button</li>
+        </ul>
+
+        <h3>Method 2: Clear Cache (More Thorough)</h3>
+        <ul>
+            <li><strong>Chrome:</strong> F12 → Right-click refresh button → "Empty Cache and Hard Reload"</li>
+            <li><strong>Firefox:</strong> F12 → Network tab → Click settings gear → "Disable Cache" → Refresh</li>
+            <li><strong>Safari:</strong> Develop menu → "Empty Caches" → Refresh</li>
+        </ul>
+
+        <h3>Method 3: Incognito/Private Window</h3>
+        <p>Open <code>http://localhost:3000</code> in an incognito/private browsing window</p>
+    </div>
+
+    <div class="step">
+        <h2>✅ After Clearing Cache, You Should See:</h2>
+        <ul>
+            <li>✅ No "OptimalHomepage" errors in console</li>
+            <li>✅ No "loadCategory before initialization" errors</li>
+            <li>✅ SceneScout homepage loads properly</li>
+            <li>✅ Event categories display correctly</li>
+        </ul>
+    </div>
+
+    <div class="step">
+        <h2>🔧 Technical Explanation</h2>
+        <p>The Next.js server has been properly fixed, but your browser cached the old webpack bundles that contain references to the deleted OptimalHomepage component. A hard refresh forces the browser to download the new, corrected JavaScript bundles.</p>
+    </div>
+
+    <h3>🎯 Test URL: <a href="http://localhost:3000" target="_blank">http://localhost:3000</a></h3>
+</body>
+</html>

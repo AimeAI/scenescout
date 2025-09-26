@@ -43,9 +43,18 @@ export class LiveEventScraper {
         try {
           const response = await axios.get(searchUrl, {
             headers: {
-              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+              'Accept-Language': 'en-US,en;q=0.5',
+              'Accept-Encoding': 'gzip, deflate, br',
+              'Connection': 'keep-alive',
+              'Upgrade-Insecure-Requests': '1'
             },
-            timeout: 15000
+            timeout: 15000,
+            maxRedirects: 5,
+            validateStatus: function (status) {
+              return status < 500 // Accept any status code less than 500
+            }
           })
 
           const $ = cheerio.load(response.data)
@@ -132,11 +141,89 @@ export class LiveEventScraper {
             })
           })
         } catch (pageError) {
-          console.error(`Failed to scrape page ${page}:`, pageError.message)
+          if (pageError.response) {
+            console.warn(`⚠️ Eventbrite page ${page} returned ${pageError.response.status}: ${pageError.response.statusText}`)
+            // Continue scraping other pages even if one fails
+          } else if (pageError.code === 'ECONNABORTED') {
+            console.warn(`⚠️ Eventbrite page ${page} timed out - continuing...`)
+          } else {
+            console.error(`❌ Failed to scrape page ${page}:`, pageError.message)
+          }
         }
       }
     } catch (error) {
       console.error('Eventbrite scraping failed:', error.message)
+      // Return any events we managed to collect before the error
+    }
+
+    // If we didn't get enough events, try with a more generic query
+    if (events.length < 5 && query !== 'events') {
+      console.log(`🔄 Retrying with generic query due to low results...`)
+      try {
+        const genericUrl = `https://www.eventbrite.ca/d/canada--toronto/events/?page=1`
+        const response = await axios.get(genericUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
+          },
+          timeout: 15000,
+          maxRedirects: 5,
+          validateStatus: function (status) {
+            return status < 500
+          }
+        })
+
+        if (response.status === 200) {
+          const $ = cheerio.load(response.data)
+          
+          $('article, [data-testid="search-event-card"], .search-event-card, .event-card').each((i, elem) => {
+            const $elem = $(elem)
+            const title = $elem.find('h3, h2, [data-testid="event-title"], .event-title').first().text().trim()
+            
+            if (!title || title.length < 5) return
+            
+            // Add generic events that match our original query
+            if (this.isRelevantToQuery(title, query)) {
+              const description = $elem.find('.event-description, .summary, p').first().text().trim()
+              const venueText = $elem.find('[data-testid="event-location"], .location-info, .venue-name').first().text().trim()
+              const venue = this.extractVenueName(venueText)
+              const dateElement = $elem.find('[data-testid="event-date"], .date-info, .event-date, time').first()
+              const dateText = dateElement.text().trim() || dateElement.attr('datetime') || ''
+              const { date, time } = this.parseDateTime(dateText, title)
+              const priceText = $elem.find('[data-testid="event-price"], .price, .ticket-price').first().text().trim()
+              const { price, priceMax, priceRange } = this.parsePrice(priceText)
+              const imageElement = $elem.find('img').first()
+              const imageUrl = imageElement.attr('src') || imageElement.attr('data-src') || ''
+              const linkElement = $elem.find('a').first()
+              const link = linkElement.attr('href') || ''
+              const venueInfo = this.getVenueInfo(venue)
+              
+              events.push({
+                title: title.substring(0, 255),
+                description: description || `${title} - Event in Toronto`,
+                date,
+                time,
+                venue_name: venue,
+                address: venueInfo.address,
+                price_min: price,
+                price_max: priceMax,
+                price_range: priceRange,
+                external_url: link?.startsWith('http') ? link : `https://www.eventbrite.ca${link}`,
+                category: this.categorizeEvent(title + ' ' + description),
+                image_url: imageUrl?.startsWith('http') ? imageUrl : '',
+                latitude: venueInfo.lat,
+                longitude: venueInfo.lng
+              })
+            }
+          })
+        }
+      } catch (fallbackError) {
+        console.error('🔄 Fallback scraping also failed:', fallbackError.message)
+      }
     }
 
     return events

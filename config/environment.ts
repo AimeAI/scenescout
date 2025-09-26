@@ -144,7 +144,7 @@ export function loadEnvironmentConfig(): EnvironmentConfig {
           secret: validateRequired('TICKETMASTER_API_SECRET', process.env.TICKETMASTER_API_SECRET),
         },
         google: {
-          placesApiKey: validateRequired('GOOGLE_PLACES_API_KEY', process.env.GOOGLE_PLACES_API_KEY),
+          placesApiKey: getOptional(process.env.GOOGLE_PLACES_API_KEY) || '',
           clientId: getOptional(process.env.GOOGLE_CLIENT_ID),
           clientSecret: getOptional(process.env.GOOGLE_CLIENT_SECRET),
         },

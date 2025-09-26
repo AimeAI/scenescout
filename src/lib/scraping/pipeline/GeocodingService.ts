@@ -112,10 +112,6 @@ export class GeocodingService {
       // Try multiple geocoding strategies
       let result = await this.tryNominatimGeocoding(normalizedAddress);
       
-      if (!result.coordinates && process.env.GOOGLE_MAPS_API_KEY) {
-        result = await this.tryGoogleGeocoding(normalizedAddress);
-      }
-      
       if (!result.coordinates && this.options.fallbackToApproximateLocation) {
         result = await this.tryFallbackGeocoding(normalizedAddress);
       }
@@ -225,62 +221,6 @@ export class GeocodingService {
     }
   }
 
-  private async tryGoogleGeocoding(address: string): Promise<GeocodingResult> {
-    try {
-      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-      if (!apiKey) {
-        return { confidence: 0, source: 'api' };
-      }
-      
-      const encodedAddress = encodeURIComponent(address);
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${apiKey}`;
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.options.timeout);
-      
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        throw new Error(`Google Geocoding API error: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data.status === 'OK' && data.results.length > 0) {
-        const result = data.results[0];
-        const location = result.geometry.location;
-        const confidence = this.calculateGoogleConfidence(result);
-        
-        // Extract address components
-        const addressComponents = result.address_components;
-        const city = this.extractGoogleAddressComponent(addressComponents, ['locality', 'sublocality']);
-        const state = this.extractGoogleAddressComponent(addressComponents, ['administrative_area_level_1']);
-        const country = this.extractGoogleAddressComponent(addressComponents, ['country']);
-        const postalCode = this.extractGoogleAddressComponent(addressComponents, ['postal_code']);
-        
-        return {
-          coordinates: {
-            latitude: location.lat,
-            longitude: location.lng
-          },
-          formattedAddress: result.formatted_address,
-          city,
-          state,
-          country,
-          postalCode,
-          confidence,
-          source: 'api'
-        };
-      }
-      
-      return { confidence: 0, source: 'api' };
-      
-    } catch (error) {
-      logger.warn('Google geocoding failed:', error);
-      return { confidence: 0, source: 'api' };
-    }
-  }
 
   private async tryFallbackGeocoding(address: string): Promise<GeocodingResult> {
     const normalizedAddress = address.toLowerCase();
@@ -396,38 +336,7 @@ export class GeocodingService {
     return Math.min(1.0, confidence);
   }
 
-  private calculateGoogleConfidence(result: any): number {
-    let confidence = 0.9; // Base confidence for Google (usually more accurate)
-    
-    // Check geometry location type
-    if (result.geometry?.location_type) {
-      switch (result.geometry.location_type) {
-        case 'ROOFTOP':
-          confidence = 1.0;
-          break;
-        case 'RANGE_INTERPOLATED':
-          confidence = 0.9;
-          break;
-        case 'GEOMETRIC_CENTER':
-          confidence = 0.7;
-          break;
-        case 'APPROXIMATE':
-          confidence = 0.5;
-          break;
-      }
-    }
-    
-    return confidence;
-  }
 
-  private extractGoogleAddressComponent(components: any[], types: string[]): string | undefined {
-    for (const component of components) {
-      if (component.types && component.types.some((type: string) => types.includes(type))) {
-        return component.long_name;
-      }
-    }
-    return undefined;
-  }
 
   private capitalizeWords(str: string): string {
     return str.replace(/\w\S*/g, (txt) => 
