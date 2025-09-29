@@ -25,11 +25,9 @@ const CATEGORIES = [
   // Community & Learning
   { id: 'workshops-classes', title: 'Workshops & Classes', emoji: '📚', query: 'workshop class education learning' },
   { id: 'tech-startups', title: 'Tech & Startups', emoji: '💻', query: 'tech startup meetup networking' },
-  { id: 'community-causes', title: 'Community & Causes', emoji: '🤝', query: 'community volunteer charity causes' },
   
   // Special Categories
   { id: 'family-kids', title: 'Family & Kids', emoji: '👨‍👩‍👧‍👦', query: 'family kids children activities' },
-  { id: 'lgbtq-queer', title: 'LGBTQ2S+ & Queer Culture', emoji: '🏳️‍🌈', query: 'lgbtq queer pride community' },
   { id: 'date-night', title: 'Date Night Ideas', emoji: '💕', query: 'date night romantic couples' },
   { id: 'late-night', title: 'Late Night (11pm–4am)', emoji: '🌙', query: 'late night after hours club' },
   { id: 'neighborhood', title: 'Neighborhood Hotspots', emoji: '📍', query: 'local neighborhood community events' },
@@ -177,8 +175,8 @@ export default function HomePage() {
             </p>
             <div className="text-xs text-gray-500 mb-4 max-w-2xl mx-auto">
               🎵 Entertainment: Music, Nightlife, Comedy, Theatre, Arts & Film<br/>
-              🌟 Lifestyle: Food Pop-ups, Wellness, Outdoors, Date Night & Community<br/>
-              🚀 Special: LGBTQ2S+, Late Night, Family, Tech & Halloween
+              🌟 Lifestyle: Food Pop-ups, Wellness, Outdoors, Date Night & Markets<br/>
+              🚀 Special: Late Night, Family, Tech, Neighborhood & Halloween
             </div>
             
             {totalEvents > 0 && (
