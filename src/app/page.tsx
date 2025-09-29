@@ -1,54 +1,34 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { NetflixCategoryRow } from '@/components/NetflixCategoryRow'
 
-// Comprehensive city event categories - ordered by user engagement
-const CITY_CATEGORIES = [
-  { id: 'tech', title: 'Tech & Startups', emoji: '💻', query: 'tech meetup startup' },
-  { id: 'trending', title: 'Trending Now', emoji: '🔥', query: 'events toronto today' },
-  { id: 'free', title: 'Free Events', emoji: '🆓', query: 'free events activities' },
-  { id: 'nightlife', title: 'Nightlife & Parties', emoji: '🌃', query: 'party nightlife bar club' },
-  { id: 'music', title: 'Live Music', emoji: '🎵', query: 'concerts music live bands' },
-  { id: 'food', title: 'Food & Drinks', emoji: '🍽️', query: 'food festivals restaurants dining' },
-  { id: 'business', title: 'Business & Networking', emoji: '💼', query: 'business networking professional meetup' },
-  { id: 'learning', title: 'Workshops & Classes', emoji: '📚', query: 'workshops classes learning skills' },
-  { id: 'comedy', title: 'Comedy Shows', emoji: '😂', query: 'comedy shows standup improv' },
-  { id: 'fitness', title: 'Fitness & Wellness', emoji: '💪', query: 'fitness yoga wellness health' },
-  { id: 'arts', title: 'Arts & Culture', emoji: '🎨', query: 'art exhibitions galleries museums' },
-  { id: 'gaming', title: 'Gaming & Esports', emoji: '🎮', query: 'gaming esports video games tournaments' },
-  { id: 'outdoor', title: 'Outdoor Activities', emoji: '🏞️', query: 'outdoor hiking nature activities' },
-  { id: 'sports', title: 'Sports & Games', emoji: '⚽', query: 'sports games tournaments matches' },
-  { id: 'theater', title: 'Theater & Shows', emoji: '🎭', query: 'theater shows plays performances' },
-  { id: 'dating', title: 'Dating & Singles', emoji: '💕', query: 'dating singles speed dating meetup' },
-  { id: 'family', title: 'Family & Kids', emoji: '👨‍👩‍👧‍👦', query: 'family kids children activities' },
-  { id: 'students', title: 'Student Events', emoji: '🎓', query: 'student university college campus' },
-  { id: 'photography', title: 'Photography & Film', emoji: '📸', query: 'photography film cinema workshops' },
-  { id: 'markets', title: 'Markets & Fairs', emoji: '🛍️', query: 'markets fairs farmers craft' },
-  { id: 'festivals', title: 'Festivals & Celebrations', emoji: '🎪', query: 'festivals celebrations cultural events' },
-  { id: 'volunteer', title: 'Volunteer & Charity', emoji: '🤝', query: 'volunteer charity community service' },
-  { id: 'lgbtq', title: 'LGBTQ+ Events', emoji: '🏳️‍🌈', query: 'lgbtq pride queer community' },
-  { id: 'seniors', title: 'Seniors & 50+', emoji: '👴', query: 'seniors 50+ mature adults' },
-  { id: 'religious', title: 'Religious & Spiritual', emoji: '🙏', query: 'religious spiritual meditation faith' },
-  { id: 'automotive', title: 'Cars & Motorcycles', emoji: '🚗', query: 'cars automotive motorcycles shows' },
-  { id: 'pets', title: 'Pets & Animals', emoji: '🐕', query: 'pets dogs animals adoption' },
-  { id: 'fashion', title: 'Fashion & Beauty', emoji: '👗', query: 'fashion beauty style shows' },
-  { id: 'crafts', title: 'Crafts & DIY', emoji: '🎨', query: 'crafts diy handmade workshops' },
-  { id: 'books', title: 'Books & Literature', emoji: '📖', query: 'books literature reading clubs' }
+// Featured categories for faster loading
+const CATEGORIES = [
+  // Top Music Categories 
+  { id: 'concerts', title: 'Concerts & Music', emoji: '🎵', query: 'concerts music' },
+  { id: 'halloween', title: 'Halloween Events', emoji: '🎃', query: 'halloween' },
+  { id: 'food-drink', title: 'Food & Drink', emoji: '🍽️', query: 'food festival' },
+  
+  // Popular Events
+  { id: 'sports', title: 'Sports Events', emoji: '🏆', query: 'sports' },
+  { id: 'comedy-shows', title: 'Comedy Shows', emoji: '😂', query: 'comedy' },
+  { id: 'networking', title: 'Networking', emoji: '🤝', query: 'networking business' },
+  
+  // Local Events
+  { id: 'workshops', title: 'Workshops', emoji: '📚', query: 'workshop education' },
+  { id: 'tech', title: 'Tech Events', emoji: '💻', query: 'technology meetup' }
 ]
 
-// Fix component name to avoid webpack cache issues
 export default function HomePage() {
   const [categoryEvents, setCategoryEvents] = useState<Record<string, any[]>>({})
-  const [loadingCategories, setLoadingCategories] = useState<Record<string, boolean>>({})
-  const [hasMoreCategories, setHasMoreCategories] = useState<Record<string, boolean>>({})
-  const [initialLoading, setInitialLoading] = useState(true)
-  const [loadedCategoryCount, setLoadedCategoryCount] = useState(0)
+  const [loading, setLoading] = useState(true)
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null)
+  const [savedEvents, setSavedEvents] = useState<Set<string>>(new Set())
+  const [searchQuery, setSearchQuery] = useState('')
 
-
-  const getUserLocation = () => {
+  // Get user location
+  useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -56,218 +36,111 @@ export default function HomePage() {
             lat: position.coords.latitude,
             lng: position.coords.longitude
           })
+          console.log('✅ Location detected:', position.coords)
         },
         () => {
-          // Default to Toronto if location denied
-          setUserLocation({ lat: 43.6532, lng: -79.3832 })
+          console.log('📍 Using default location (SF)')
+          setUserLocation({ lat: 37.7749, lng: -122.4194 })
         }
       )
     } else {
-      setUserLocation({ lat: 43.6532, lng: -79.3832 })
+      setUserLocation({ lat: 37.7749, lng: -122.4194 })
     }
-  }
-
-  const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-    const R = 6371 // Earth's radius in km
-    const dLat = (lat2 - lat1) * Math.PI / 180
-    const dLng = (lng2 - lng1) * Math.PI / 180
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLng/2) * Math.sin(dLng/2)
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-    return R * c
-  }
-
-  const sortEventsByLocation = useCallback((events: any[]) => {
-    if (!userLocation) return events
-    
-    return events.sort((a, b) => {
-      const distanceA = calculateDistance(
-        userLocation.lat, userLocation.lng,
-        a.latitude || 43.6532, a.longitude || -79.3832
-      )
-      const distanceB = calculateDistance(
-        userLocation.lat, userLocation.lng,
-        b.latitude || 43.6532, b.longitude || -79.3832
-      )
-      return distanceA - distanceB
-    })
-  }, [userLocation])
-
-
-  // Helper function to remove duplicates
-  const removeDuplicates = (events: any[]) => {
-    const seen = new Set<string>()
-    return events.filter(event => {
-      const key = event.title?.toLowerCase().replace(/[^\w]/g, '') + event.date
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-  }
-
-  // Move loadCategoryEvents function definition to avoid temporal dead zone
-  const loadCategoryEvents = useCallback(async (categoryId: string, query: string, isLoadMore: boolean) => {
-    setLoadingCategories(prev => ({ ...prev, [categoryId]: true }))
-    
-    try {
-      // Use functional update to get current events without dependency
-      let currentEvents: any[] = []
-      let offset = 0
-      
-      setCategoryEvents(prev => {
-        currentEvents = prev[categoryId] || []
-        offset = isLoadMore ? currentEvents.length : 0
-        return prev // Don't update, just read
-      })
-      
-      const limit = 25
-      
-      console.log(`🔍 Loading ${categoryId}: query="${query}", offset=${offset}, isLoadMore=${isLoadMore}`)
-      
-      // Try repository first (fast)
-      let response = await fetch(
-        `/api/events/repository?category=${categoryId}&q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}`
-      )
-      let data = await response.json()
-      
-      // If repository has few events, supplement with live scraping
-      if (data.success && data.events.length < 10 && offset === 0) {
-        console.log(`📡 Repository has ${data.events.length} events, supplementing with live scraping...`)
-        
-        const liveResponse = await fetch(
-          `/api/search-enhanced?q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}`
-        )
-        const liveData = await liveResponse.json()
-        
-        if (liveData.success && liveData.events.length > 0) {
-          // Combine repository + live events
-          const combinedEvents = [...data.events, ...liveData.events]
-          const uniqueEvents = removeDuplicates(combinedEvents)
-          data.events = uniqueEvents
-          data.count = uniqueEvents.length
-          
-          console.log(`🔄 Combined: ${data.events.length} repository + ${liveData.events.length} live = ${uniqueEvents.length} unique`)
-        }
-      }
-      
-      console.log(`📊 ${categoryId} response:`, { success: data.success, count: data.count, hasMore: data.hasMore })
-      
-      if (data.success && data.events.length > 0) {
-        // Sort events by geographic proximity
-        const sortedEvents = sortEventsByLocation(data.events)
-        
-        setCategoryEvents(prev => ({
-          ...prev,
-          [categoryId]: isLoadMore 
-            ? [...(prev[categoryId] || []), ...sortedEvents]
-            : sortedEvents
-        }))
-        
-        setHasMoreCategories(prev => ({
-          ...prev,
-          [categoryId]: data.hasMore || (currentEvents.length + data.events.length < 50)
-        }))
-        
-        console.log(`✅ ${categoryId}: Added ${sortedEvents.length} events, total now ${isLoadMore ? currentEvents.length + sortedEvents.length : sortedEvents.length}`)
-      } else {
-        console.log(`⚠️ ${categoryId}: No events found`)
-        setHasMoreCategories(prev => ({
-          ...prev,
-          [categoryId]: false
-        }))
-      }
-    } catch (error) {
-      console.error(`Failed to load ${categoryId} events:`, error)
-      setHasMoreCategories(prev => ({
-        ...prev,
-        [categoryId]: false
-      }))
-    } finally {
-      setLoadingCategories(prev => ({ ...prev, [categoryId]: false }))
-    }
-  }, [sortEventsByLocation])
-
-  const loadInitialEvents = async () => {
-    // Fix: Don't block initial load, just prevent duplicates
-    if (initialLoading && Object.keys(categoryEvents).length > 0) return
-    
-    setInitialLoading(true)
-    
-    try {
-      // Load first 6 categories with more events each
-      const initialCategories = CITY_CATEGORIES.slice(0, 6)
-      
-      for (const category of initialCategories) {
-        await loadCategoryEvents(category.id, category.query, false)
-      }
-      
-      setLoadedCategoryCount(6)
-    } catch (error) {
-      console.error('Failed to load initial events:', error)
-    } finally {
-      setInitialLoading(false)
-    }
-  }
-
-  const loadMoreCategories = async () => {
-    if (loadedCategoryCount >= CITY_CATEGORIES.length) return
-    
-    console.log(`📂 Loading more categories: ${loadedCategoryCount}/${CITY_CATEGORIES.length}`)
-    
-    // Load next 3 categories at once for better UX
-    const nextCategories = CITY_CATEGORIES.slice(loadedCategoryCount, loadedCategoryCount + 3)
-    console.log(`📋 Next categories:`, nextCategories.map(c => c.title))
-    
-    try {
-      for (const category of nextCategories) {
-        await loadCategoryEvents(category.id, category.query, false)
-      }
-      
-      setLoadedCategoryCount(prev => prev + nextCategories.length)
-      console.log(`✅ Loaded ${nextCategories.length} more categories`)
-    } catch (error) {
-      console.error('Failed to load more categories:', error)
-    }
-  }
-
-  // Initial load effect
-  useEffect(() => {
-    getUserLocation()
-    // Load events immediately on mount, location sorting will happen when available
-    loadInitialEvents()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Infinite scroll effect
-  useEffect(() => {
-    const handleScroll = () => {
-      if (
-        window.innerHeight + document.documentElement.scrollTop
-        >= document.documentElement.offsetHeight - 1000 &&
-        loadedCategoryCount < CITY_CATEGORIES.length &&
-        !initialLoading
-      ) {
-        loadMoreCategories()
+  // Load events for a category
+  const loadEvents = async (categoryId: string, query: string) => {
+    console.log(`🔍 Loading ${categoryId} events...`)
+    
+    const locationParams = userLocation ? 
+      `lat=${userLocation.lat}&lng=${userLocation.lng}` : 
+      'city=San Francisco'
+    
+    try {
+      const response = await fetch(`/api/search-events?q=${encodeURIComponent(query)}&limit=15&${locationParams}`)
+      const data = await response.json()
+      
+      if (data.success && data.events?.length > 0) {
+        setCategoryEvents(prev => ({
+          ...prev,
+          [categoryId]: data.events
+        }))
+        console.log(`✅ ${categoryId}: ${data.events.length} events from ${data.sources?.ticketmaster || 0} TM + ${data.sources?.eventbrite || 0} EB`)
+      } else {
+        console.log(`ℹ️ No events found for ${categoryId}`)
+        setCategoryEvents(prev => ({
+          ...prev,
+          [categoryId]: []
+        }))
       }
-    }
-
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadedCategoryCount, initialLoading])
-
-  const handleLoadMoreCategory = (categoryId: string, query: string) => {
-    console.log(`🔄 Loading more events for category: ${categoryId}`)
-    if (!loadingCategories[categoryId]) {
-      loadCategoryEvents(categoryId, query, true)
+    } catch (error) {
+      console.error(`❌ Error loading ${categoryId}:`, error)
+      setCategoryEvents(prev => ({
+        ...prev,
+        [categoryId]: []
+      }))
     }
   }
+
+  // Load all categories
+  useEffect(() => {
+    const loadAllCategories = async () => {
+      setLoading(true)
+      console.log('🚀 Starting to load all categories...')
+      
+      // Load categories in parallel (much faster)
+      const promises = CATEGORIES.map(category => {
+        console.log(`📂 Loading category: ${category.title}`)
+        return loadEvents(category.id, category.query)
+      })
+      
+      await Promise.all(promises)
+      
+      setLoading(false)
+      console.log('✅ All categories loaded!')
+    }
+    
+    // Start loading after location is set or timeout
+    const timer = setTimeout(() => {
+      loadAllCategories()
+    }, userLocation ? 100 : 500)
+    
+    return () => clearTimeout(timer)
+  }, [userLocation])
 
   const handleEventClick = (event: any) => {
     if (event.external_url) {
       window.open(event.external_url, '_blank')
     }
+  }
+
+  const handleSaveEvent = (event: any) => {
+    const newSaved = new Set(savedEvents)
+    if (savedEvents.has(event.id)) {
+      newSaved.delete(event.id)
+    } else {
+      newSaved.add(event.id)
+    }
+    setSavedEvents(newSaved)
+    localStorage.setItem('savedEvents', JSON.stringify([...newSaved]))
+  }
+
+  // Load saved events from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('savedEvents')
+    if (saved) {
+      setSavedEvents(new Set(JSON.parse(saved)))
+    }
+  }, [])
+
+  // Filter events by search query
+  const filterEventsBySearch = (events: any[]) => {
+    if (!searchQuery) return events
+    return events.filter(event => 
+      event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.venue_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    )
   }
 
   const totalEvents = Object.values(categoryEvents).reduce((sum, events) => sum + events.length, 0)
@@ -277,116 +150,214 @@ export default function HomePage() {
     <AppLayout>
       <div className="min-h-screen bg-black text-white">
         {/* Hero Section */}
-        <div className="relative h-[50vh] bg-gradient-to-br from-purple-900 via-blue-900 to-black flex items-center justify-center">
-          <div className="text-center z-10">
+        <div className="relative h-[40vh] bg-gradient-to-br from-purple-900 via-blue-900 to-black flex items-center justify-center">
+          <div className="text-center z-10 max-w-4xl mx-auto px-4">
             <h1 className="text-5xl font-bold mb-4">🎯 SceneScout</h1>
-            <p className="text-xl text-gray-300 mb-6">
-              Discover Events Near You
+            <p className="text-xl text-gray-300 mb-2">
+              {userLocation ? 'Events Near You' : 'Discover Events'}
             </p>
+            <p className="text-sm text-gray-400 mb-6">
+              Real-time events from Ticketmaster & EventBrite - {CATEGORIES.length} Featured Categories
+            </p>
+            <div className="text-xs text-gray-500 mb-4 max-w-2xl mx-auto">
+              🎵 Music & Entertainment: Concerts, Halloween, Comedy, Sports<br/>
+              🌟 Professional & Local: Networking, Workshops, Tech, Food & Drink
+            </div>
             
-            <div className="flex gap-4 justify-center">
-              <button
-                onClick={() => window.location.href = '/search'}
-                className="px-6 py-3 bg-orange-600 hover:bg-orange-700 rounded-lg font-semibold transition"
-              >
-                🔍 Search Events
-              </button>
-              <button
-                onClick={() => window.location.href = '/map'}
-                className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition"
-              >
-                🗺️ Event Map
-              </button>
-              <button
-                onClick={() => window.location.href = '/feed'}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition"
-              >
-                🔥 Discover Trending
-              </button>
+            {totalEvents > 0 && (
+              <div className="flex justify-center gap-8 mb-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-orange-500">{totalEvents}</div>
+                  <div className="text-xs text-gray-400">Events Found</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-500">{freeEvents}</div>
+                  <div className="text-xs text-gray-400">Free Events</div>
+                </div>
+              </div>
+            )}
+
+            {/* Search Bar */}
+            <div className="max-w-md mx-auto mb-4">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search events, venues, or keywords..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-white/10 border border-white/20 rounded-lg pl-4 pr-4 py-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-3 text-white/60 hover:text-white"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
 
-            {totalEvents > 0 && (
-              <p className="text-sm text-gray-400 mt-4">
-                {totalEvents} events • {freeEvents} free • Sorted by distance
-              </p>
-            )}
+            <div className="text-sm text-gray-500">
+              {userLocation ? 
+                '📍 Showing events sorted by distance and popularity' : 
+                '📍 Getting your location for personalized results...'
+              }
+            </div>
           </div>
         </div>
 
-        {/* Netflix-Style Category Rows */}
+        {/* Event Categories */}
         <div className="px-8 py-8 space-y-8">
-          {initialLoading ? (
+          {loading ? (
             <div className="text-center py-20">
               <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-500 mx-auto mb-4"></div>
               <p className="text-xl">🔍 Finding events near you...</p>
-              <p className="text-sm text-gray-400 mt-2">Loading trending events, free activities, and local favorites</p>
+              <p className="text-sm text-gray-400 mt-2">Loading {CATEGORIES.length} featured categories from Ticketmaster & EventBrite...</p>
             </div>
           ) : (
-            <>
-              {CITY_CATEGORIES.slice(0, loadedCategoryCount).map(category => {
-                const events = categoryEvents[category.id] || []
-                const loading = loadingCategories[category.id] || false
-                const hasMore = hasMoreCategories[category.id] || false
-
-                // Always show category if it has events or is loading
-                return (
-                  <NetflixCategoryRow
-                    key={category.id}
-                    title={category.title}
-                    emoji={category.emoji}
-                    events={events}
-                    onEventClick={handleEventClick}
-                    onLoadMore={() => handleLoadMoreCategory(category.id, category.query)}
-                    hasMore={hasMore}
-                    loading={loading}
-                  />
-                )
-              })}
-
-              {/* Infinite Scroll Loading */}
-              {loadedCategoryCount < CITY_CATEGORIES.length && (
-                <div className="text-center py-8">
-                  <div className="animate-pulse mb-4">
-                    <div className="text-lg text-gray-400">Loading more categories...</div>
-                    <div className="text-sm text-gray-500 mt-2">
-                      {loadedCategoryCount} of {CITY_CATEGORIES.length} loaded
-                    </div>
+            CATEGORIES.map(category => {
+              const allEvents = categoryEvents[category.id] || []
+              const filteredEvents = filterEventsBySearch(allEvents)
+              
+              // Show all categories, even if empty (for better UX)
+              
+              return (
+                <div key={category.id} className="mb-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-2xl font-bold flex items-center gap-2">
+                      <span>{category.emoji}</span>
+                      {category.title}
+                    </h2>
+                    <span className="text-gray-400 text-sm">
+                      {filteredEvents.length} events
+                    </span>
                   </div>
-                  
-                  {/* Manual Load Button */}
-                  <button
-                    onClick={loadMoreCategories}
-                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition"
-                  >
-                    Load More Categories
-                  </button>
-                </div>
-              )}
 
-              {/* Stats */}
-              {totalEvents > 0 && (
-                <div className="text-center py-8 border-t border-gray-800">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-2xl mx-auto">
-                    <div className="bg-gray-800 rounded-lg p-4">
-                      <div className="text-2xl font-bold text-orange-500">{totalEvents}</div>
-                      <div className="text-sm text-gray-400">Total Events</div>
-                    </div>
-                    <div className="bg-gray-800 rounded-lg p-4">
-                      <div className="text-2xl font-bold text-green-500">{freeEvents}</div>
-                      <div className="text-sm text-gray-400">Free Events</div>
-                    </div>
-                    <div className="bg-gray-800 rounded-lg p-4">
-                      <div className="text-2xl font-bold text-blue-500">{loadedCategoryCount}</div>
-                      <div className="text-sm text-gray-400">of {CITY_CATEGORIES.length} Categories</div>
-                    </div>
-                    <div className="bg-gray-800 rounded-lg p-4">
-                      <div className="text-2xl font-bold text-purple-500">📍</div>
-                      <div className="text-sm text-gray-400">Near You</div>
-                    </div>
+                  <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2">
+                    {filteredEvents.length === 0 ? (
+                      <div className="flex-shrink-0 w-72 p-6 bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-600 text-center">
+                        <div className="text-3xl mb-2">{category.emoji}</div>
+                        <p className="text-gray-400 text-sm mb-2">No events found</p>
+                        <p className="text-gray-500 text-xs">Try a different location or check back later</p>
+                      </div>
+                    ) : (
+                      filteredEvents.map((event, index) => (
+                      <div
+                        key={`${event.id}-${index}`}
+                        className="flex-shrink-0 w-72 cursor-pointer group"
+                      >
+                        <div className="bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-700 transition-all duration-300 group-hover:scale-105 relative">
+                          {/* Save Button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleSaveEvent(event)
+                            }}
+                            className="absolute top-2 left-2 z-10 bg-black/70 hover:bg-black text-white p-2 rounded-full transition-colors"
+                          >
+                            {savedEvents.has(event.id) ? '❤️' : '🤍'}
+                          </button>
+
+                          {/* Event Image */}
+                          <div className="relative h-40 overflow-hidden">
+                            {event.image_url ? (
+                              <img
+                                src={event.image_url}
+                                alt={event.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none'
+                                  e.currentTarget.nextElementSibling.style.display = 'flex'
+                                }}
+                              />
+                            ) : null}
+                            
+                            {/* Fallback gradient */}
+                            <div className={`absolute inset-0 bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-4xl text-white ${event.image_url ? 'hidden' : 'flex'}`}>
+                              {category.emoji}
+                            </div>
+                            
+                            {/* Overlay for better text readability */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                            
+                            {/* Date badge */}
+                            {event.date && (
+                              <div className="absolute top-2 right-2">
+                                <span className="bg-black/70 text-white px-2 py-1 rounded text-xs font-medium">
+                                  {new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Event Info */}
+                          <div className="p-3" onClick={() => handleEventClick(event)}>
+                            <h3 className="font-semibold text-sm mb-1 line-clamp-2 text-white">
+                              {event.title}
+                            </h3>
+                            
+                            <p className="text-xs text-gray-400 mb-1">
+                              📍 {event.venue_name}
+                            </p>
+                            
+                            {event.description && (
+                              <p className="text-xs text-gray-300 mb-2 line-clamp-2">
+                                {event.description}
+                              </p>
+                            )}
+                            
+                            <div className="flex justify-between items-center mt-2">
+                              <div className="flex items-center gap-2">
+                                <span className={`text-xs font-medium px-2 py-1 rounded ${
+                                  event.price_min === 0 
+                                    ? 'bg-green-600 text-white' 
+                                    : 'bg-blue-600 text-white'
+                                }`}>
+                                  {event.price_min === 0 ? 'FREE' : `$${event.price_min}`}
+                                </span>
+                                
+                                {event.time && (
+                                  <span className="text-xs text-gray-400">
+                                    {new Date(`2000-01-01T${event.time}`).toLocaleTimeString('en-US', {
+                                      hour: 'numeric',
+                                      minute: '2-digit',
+                                      hour12: true
+                                    })}
+                                  </span>
+                                )}
+                              </div>
+                              
+                              <span className={`text-xs px-2 py-1 rounded ${
+                                event.source?.includes('ticketmaster') 
+                                  ? 'bg-blue-500/20 text-blue-400'
+                                  : 'bg-orange-500/20 text-orange-400'
+                              }`}>
+                                {event.source?.includes('ticketmaster') ? 'TM' : 'EB'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      ))
+                    )}
                   </div>
                 </div>
-              )}
-            </>
+              )
+            }).filter(Boolean)
+          )}
+          
+          {/* All categories loaded message */}
+          {!loading && (
+            <div className="text-center py-8">
+              <div className="text-2xl mb-2">✨</div>
+              <p className="text-gray-400 text-sm">
+                Showing {CATEGORIES.length} featured categories from Ticketmaster & EventBrite
+              </p>
+              <p className="text-gray-500 text-xs mt-2">
+                Visit /feed for more categories and trending events
+              </p>
+            </div>
           )}
         </div>
       </div>
