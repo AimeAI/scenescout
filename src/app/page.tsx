@@ -3,21 +3,37 @@
 import { useState, useEffect } from 'react'
 import { AppLayout } from '@/components/layout/AppLayout'
 
-// Featured categories for faster loading
+// Enhanced categories with better naming and coverage
 const CATEGORIES = [
-  // Top Music Categories 
-  { id: 'concerts', title: 'Concerts & Music', emoji: '🎵', query: 'concerts music' },
-  { id: 'halloween', title: 'Halloween Events', emoji: '🎃', query: 'halloween' },
-  { id: 'food-drink', title: 'Food & Drink', emoji: '🍽️', query: 'food festival' },
+  // Music & Entertainment
+  { id: 'music-concerts', title: 'Music & Concerts', emoji: '🎵', query: 'concerts music live shows' },
+  { id: 'nightlife-dj', title: 'Nightlife & DJ Sets', emoji: '🌃', query: 'nightlife dj club party' },
+  { id: 'comedy-improv', title: 'Comedy & Improv', emoji: '😂', query: 'comedy improv standup' },
+  { id: 'theatre-dance', title: 'Theatre & Dance', emoji: '🎭', query: 'theatre dance performance' },
   
-  // Popular Events
-  { id: 'sports', title: 'Sports Events', emoji: '🏆', query: 'sports' },
-  { id: 'comedy-shows', title: 'Comedy Shows', emoji: '😂', query: 'comedy' },
-  { id: 'networking', title: 'Networking', emoji: '🤝', query: 'networking business' },
+  // Food & Culture
+  { id: 'food-drink', title: 'Food & Drink (Pop-ups, Tastings)', emoji: '🍽️', query: 'food popup tasting wine beer' },
+  { id: 'arts-exhibits', title: 'Arts & Exhibits', emoji: '🎨', query: 'art gallery exhibit museum' },
+  { id: 'film-screenings', title: 'Film & Screenings', emoji: '🎬', query: 'film movie screening cinema' },
+  { id: 'markets-popups', title: 'Markets & Pop-ups', emoji: '🛍️', query: 'market popup vendor fair' },
   
-  // Local Events
-  { id: 'workshops', title: 'Workshops', emoji: '📚', query: 'workshop education' },
-  { id: 'tech', title: 'Tech Events', emoji: '💻', query: 'technology meetup' }
+  // Active & Wellness
+  { id: 'sports-fitness', title: 'Sports & Fitness', emoji: '🏃', query: 'sports fitness workout gym' },
+  { id: 'outdoors-nature', title: 'Outdoors & Nature', emoji: '🌲', query: 'outdoor hiking nature park' },
+  { id: 'wellness-mindfulness', title: 'Wellness & Mindfulness', emoji: '🧘', query: 'wellness yoga meditation mindfulness' },
+  
+  // Community & Learning
+  { id: 'workshops-classes', title: 'Workshops & Classes', emoji: '📚', query: 'workshop class education learning' },
+  { id: 'tech-startups', title: 'Tech & Startups', emoji: '💻', query: 'tech startup meetup networking' },
+  { id: 'community-causes', title: 'Community & Causes', emoji: '🤝', query: 'community volunteer charity causes' },
+  
+  // Special Categories
+  { id: 'family-kids', title: 'Family & Kids', emoji: '👨‍👩‍👧‍👦', query: 'family kids children activities' },
+  { id: 'lgbtq-queer', title: 'LGBTQ2S+ & Queer Culture', emoji: '🏳️‍🌈', query: 'lgbtq queer pride community' },
+  { id: 'date-night', title: 'Date Night Ideas', emoji: '💕', query: 'date night romantic couples' },
+  { id: 'late-night', title: 'Late Night (11pm–4am)', emoji: '🌙', query: 'late night after hours club' },
+  { id: 'neighborhood', title: 'Neighborhood Hotspots', emoji: '📍', query: 'local neighborhood community events' },
+  { id: 'halloween', title: 'Halloween Events', emoji: '🎃', query: 'halloween costume party spooky' }
 ]
 
 export default function HomePage() {
@@ -157,11 +173,12 @@ export default function HomePage() {
               {userLocation ? 'Events Near You' : 'Discover Events'}
             </p>
             <p className="text-sm text-gray-400 mb-6">
-              Real-time events from Ticketmaster & EventBrite - {CATEGORIES.length} Featured Categories
+              Real-time events from Ticketmaster & EventBrite - {CATEGORIES.length} Curated Categories
             </p>
             <div className="text-xs text-gray-500 mb-4 max-w-2xl mx-auto">
-              🎵 Music & Entertainment: Concerts, Halloween, Comedy, Sports<br/>
-              🌟 Professional & Local: Networking, Workshops, Tech, Food & Drink
+              🎵 Entertainment: Music, Nightlife, Comedy, Theatre, Arts & Film<br/>
+              🌟 Lifestyle: Food Pop-ups, Wellness, Outdoors, Date Night & Community<br/>
+              🚀 Special: LGBTQ2S+, Late Night, Family, Tech & Halloween
             </div>
             
             {totalEvents > 0 && (
@@ -213,7 +230,7 @@ export default function HomePage() {
             <div className="text-center py-20">
               <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-500 mx-auto mb-4"></div>
               <p className="text-xl">🔍 Finding events near you...</p>
-              <p className="text-sm text-gray-400 mt-2">Loading {CATEGORIES.length} featured categories from Ticketmaster & EventBrite...</p>
+              <p className="text-sm text-gray-400 mt-2">Loading {CATEGORIES.length} curated categories from Ticketmaster & EventBrite...</p>
             </div>
           ) : (
             CATEGORIES.map(category => {
@@ -352,10 +369,10 @@ export default function HomePage() {
             <div className="text-center py-8">
               <div className="text-2xl mb-2">✨</div>
               <p className="text-gray-400 text-sm">
-                Showing {CATEGORIES.length} featured categories from Ticketmaster & EventBrite
+                Showing {CATEGORIES.length} curated categories from Ticketmaster & EventBrite
               </p>
               <p className="text-gray-500 text-xs mt-2">
-                Visit /feed for more categories and trending events
+                Visit /feed for more trending events and discovery options
               </p>
             </div>
           )}
