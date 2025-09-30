@@ -45,7 +45,7 @@ const customJestConfig = {
     },
   },
   // Handle Supabase environment variables in tests
-  setupFiles: ['<rootDir>/tests/env.setup.js'],
+  // setupFiles: ['<rootDir>/tests/env.setup.js'], // Commented out - file doesn't exist
 }
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async

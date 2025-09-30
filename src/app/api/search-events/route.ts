@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { dedupeEvents } from '@/lib/deduplication/event-deduper'
+import { normalizePrice } from '@/lib/pricing/price-normalizer'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -78,15 +80,25 @@ export async function GET(request: NextRequest) {
         const priorityB = b.source?.includes('ticketmaster') ? 1 : 2
         return priorityA - priorityB
       })
-      .slice(0, limit)
     
-    console.log(`✅ Found ${sortedEvents.length} total events for "${query}"`)
+    // Apply deduplication by default (preserving Ticketmaster as preferred source)
+    const finalEvents = dedupeEvents(sortedEvents, { preserveProvider: 'ticketmaster' })
+    
+    // Apply limit after deduplication
+    const limitedEvents = finalEvents.slice(0, limit)
+    
+    // Apply price normalization if feature flag is enabled
+    const eventsWithPricing = process.env.NEXT_PUBLIC_FEATURE_PRICE_V2 === 'true'
+      ? limitedEvents.map(event => ({ ...event, normalizedPrice: normalizePrice(event) }))
+      : limitedEvents
+    
+    console.log(`✅ Found ${eventsWithPricing.length} total events for "${query}" (${allEvents.length} before deduplication)`)
     
     return NextResponse.json({
       success: true,
       query,
-      events: sortedEvents,
-      count: sortedEvents.length,
+      events: eventsWithPricing,
+      count: eventsWithPricing.length,
       sources: {
         ticketmaster: allEvents.filter(e => e.source?.includes('ticketmaster')).length,
         eventbrite: allEvents.filter(e => e.source?.includes('eventbrite')).length

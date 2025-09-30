@@ -11,7 +11,8 @@ interface IngestResponse {
 
 export async function POST(request: NextRequest) {
   try {
-    const { source } = await request.json()
+    const body = await request.json()
+    const { source, city, stateCode, size, keyword } = body
     
     // Check if Supabase is configured
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -28,15 +29,31 @@ export async function POST(request: NextRequest) {
 
     // Call the appropriate Supabase Edge Function
     let functionName: string
+    let functionBody: any = {}
+
     switch (source) {
       case 'eventbrite':
         functionName = 'ingest_eventbrite'
+        functionBody = {
+          location: city || 'Toronto',
+          limit: size || 50
+        }
         break
       case 'ticketmaster':
         functionName = 'ingest_ticketmaster'
+        functionBody = {
+          city: city || 'San Francisco',
+          stateCode: stateCode || 'CA',
+          size: size || 50,
+          keyword: keyword || undefined
+        }
         break
       case 'songkick':
         functionName = 'ingest_songkick'
+        functionBody = {
+          location: city || 'Toronto',
+          limit: size || 50
+        }
         break
       default:
         return NextResponse.json(
@@ -47,10 +64,7 @@ export async function POST(request: NextRequest) {
 
     // Invoke the edge function
     const { data, error } = await supabase.functions.invoke(functionName, {
-      body: { 
-        location: 'Toronto', // Default location, could be parameterized
-        limit: 50 
-      }
+      body: functionBody
     })
 
     if (error) {

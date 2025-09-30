@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SceneScout Test</title>
+    <style>
+        body {
+            background: #000;
+            color: #fff;
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .success { background: #10b981; }
+        .error { background: #ef4444; }
+        .loading { background: #f59e0b; }
+        .results {
+            background: #1f2937;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .event-card {
+            background: #374151;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #8b5cf6;
+        }
+        .category-section {
+            margin: 30px 0;
+        }
+        .category-title {
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            color: #f3f4f6;
+        }
+        .events-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🎯 SceneScout API Test</h1>
+        <p>Testing the unified Netflix-style event discovery system</p>
+        
+        <div id="status" class="status loading">
+            🔄 Testing APIs and loading events...
+        </div>
+        
+        <div id="results" class="results" style="display: none;">
+            <h2>Results</h2>
+            <div id="summary"></div>
+            <div id="categories"></div>
+        </div>
+    </div>
+
+    <script>
+        async function testSceneScout() {
+            const statusEl = document.getElementById('status');
+            const resultsEl = document.getElementById('results');
+            const summaryEl = document.getElementById('summary');
+            const categoriesEl = document.getElementById('categories');
+
+            try {
+                // Test categories like the main page
+                const categories = [
+                    { id: 'concerts', title: 'Major Concerts', emoji: '🎤', query: 'music concerts' },
+                    { id: 'sports', title: 'Sports Events', emoji: '🏆', query: 'sports games' },
+                    { id: 'food', title: 'Food & Drinks', emoji: '🍽️', query: 'food events' },
+                    { id: 'tech', title: 'Tech Meetups', emoji: '💻', query: 'tech meetup' }
+                ];
+
+                let totalEvents = 0;
+                let workingAPIs = [];
+                let failedAPIs = [];
+                
+                statusEl.textContent = '🔍 Loading events from all sources...';
+
+                for (const category of categories) {
+                    console.log(`Testing category: ${category.title}`);
+                    
+                    const allEvents = [];
+                    
+                    // Test Ticketmaster
+                    try {
+                        const tmResponse = await fetch(`/api/ticketmaster/search?q=${encodeURIComponent(category.query)}&limit=5&city=San Francisco`);
+                        const tmData = await tmResponse.json();
+                        
+                        if (tmData.success && tmData.events?.length > 0) {
+                            allEvents.push(...tmData.events.map(e => ({...e, source: 'Ticketmaster'})));
+                            workingAPIs.push(`Ticketmaster (${category.id})`);
+                            console.log(`✅ Ticketmaster ${category.id}: ${tmData.events.length} events`);
+                        }
+                    } catch (error) {
+                        console.warn(`❌ Ticketmaster ${category.id} failed:`, error);
+                        failedAPIs.push(`Ticketmaster (${category.id})`);
+                    }
+
+                    // Test Eventbrite
+                    try {
+                        const ebResponse = await fetch(`/api/eventbrite/search?q=${encodeURIComponent(category.query)}&limit=3&city=San Francisco`);
+                        const ebData = await ebResponse.json();
+                        
+                        if (ebData.success && ebData.events?.length > 0) {
+                            allEvents.push(...ebData.events.map(e => ({...e, source: ebData.source || 'Eventbrite'})));
+                            workingAPIs.push(`Eventbrite (${category.id})`);
+                            console.log(`✅ Eventbrite ${category.id}: ${ebData.events.length} events (${ebData.source})`);
+                        }
+                    } catch (error) {
+                        console.warn(`❌ Eventbrite ${category.id} failed:`, error);
+                        failedAPIs.push(`Eventbrite (${category.id})`);
+                    }
+
+                    totalEvents += allEvents.length;
+
+                    // Render category
+                    if (allEvents.length > 0) {
+                        const categoryDiv = document.createElement('div');
+                        categoryDiv.className = 'category-section';
+                        categoryDiv.innerHTML = `
+                            <div class="category-title">${category.emoji} ${category.title} (${allEvents.length} events)</div>
+                            <div class="events-grid">
+                                ${allEvents.map(event => `
+                                    <div class="event-card">
+                                        <h4>${event.title}</h4>
+                                        <p>📍 ${event.venue_name || 'TBA'}</p>
+                                        <p>💰 ${event.price_min === 0 ? 'FREE' : '$' + (event.price_min || 'TBA')}</p>
+                                        <p>🔗 ${event.source}</p>
+                                        <p><small>${event.description ? event.description.substring(0, 100) + '...' : 'No description'}</small></p>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                        categoriesEl.appendChild(categoryDiv);
+                    }
+                }
+
+                // Update summary
+                summaryEl.innerHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px;">
+                        <div style="text-align: center; padding: 20px; background: #059669; border-radius: 8px;">
+                            <div style="font-size: 2em; font-weight: bold;">${totalEvents}</div>
+                            <div>Total Events Found</div>
+                        </div>
+                        <div style="text-align: center; padding: 20px; background: ${workingAPIs.length > 0 ? '#059669' : '#dc2626'}; border-radius: 8px;">
+                            <div style="font-size: 2em; font-weight: bold;">${workingAPIs.length}</div>
+                            <div>Working API Calls</div>
+                        </div>
+                        <div style="text-align: center; padding: 20px; background: ${failedAPIs.length === 0 ? '#059669' : '#dc2626'}; border-radius: 8px;">
+                            <div style="font-size: 2em; font-weight: bold;">${failedAPIs.length}</div>
+                            <div>Failed API Calls</div>
+                        </div>
+                    </div>
+                    
+                    <div style="background: #1f2937; padding: 15px; border-radius: 8px; margin: 10px 0;">
+                        <h4>Working APIs:</h4>
+                        <ul>${workingAPIs.map(api => `<li style="color: #10b981;">${api}</li>`).join('')}</ul>
+                    </div>
+                    
+                    ${failedAPIs.length > 0 ? `
+                    <div style="background: #1f2937; padding: 15px; border-radius: 8px; margin: 10px 0;">
+                        <h4>Failed APIs:</h4>
+                        <ul>${failedAPIs.map(api => `<li style="color: #ef4444;">${api}</li>`).join('')}</ul>
+                    </div>
+                    ` : ''}
+                `;
+
+                if (totalEvents > 0) {
+                    statusEl.className = 'status success';
+                    statusEl.textContent = `✅ SUCCESS: Found ${totalEvents} events across ${categories.length} categories!`;
+                } else {
+                    statusEl.className = 'status error';
+                    statusEl.textContent = `❌ NO EVENTS: All API calls failed or returned no results`;
+                }
+
+                resultsEl.style.display = 'block';
+                console.log(`🎉 TEST COMPLETE: ${totalEvents} events found, ${workingAPIs.length} working APIs, ${failedAPIs.length} failed APIs`);
+
+            } catch (error) {
+                console.error('Test failed:', error);
+                statusEl.className = 'status error';
+                statusEl.textContent = `❌ ERROR: ${error.message}`;
+            }
+        }
+
+        // Start test when page loads
+        window.addEventListener('load', testSceneScout);
+    </script>
+</body>
+</html>

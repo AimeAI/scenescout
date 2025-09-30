@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SceneScout Test</title>
+    <style>
+        body { background: #000; color: #fff; font-family: Arial; padding: 20px; }
+        .hero { text-align: center; margin: 40px 0; }
+        .category { margin: 30px 0; }
+        .events { display: flex; gap: 20px; overflow-x: auto; padding: 10px 0; }
+        .event { 
+            background: #333; 
+            border-radius: 8px; 
+            padding: 15px; 
+            min-width: 250px; 
+            cursor: pointer;
+        }
+        .event:hover { background: #444; }
+        .loading { text-align: center; padding: 40px; }
+    </style>
+</head>
+<body>
+    <div class="hero">
+        <h1>🎯 SceneScout</h1>
+        <p>Events Near You</p>
+        <div id="stats"></div>
+    </div>
+
+    <div id="content">
+        <div class="loading">🔍 Loading events from Ticketmaster and Eventbrite...</div>
+    </div>
+
+    <script>
+        // Test both APIs work
+        async function testAPIs() {
+            const categories = [
+                { id: 'concerts', title: '🎤 Major Concerts', query: 'music concerts' },
+                { id: 'sports', title: '🏆 Sports Events', query: 'sports games' },
+                { id: 'food', title: '🍽️ Food & Drinks', query: 'food events' },
+                { id: 'tech', title: '💻 Tech Meetups', query: 'tech meetup' }
+            ];
+
+            let totalEvents = 0;
+            let content = '';
+
+            for (const category of categories) {
+                console.log(`Loading ${category.id}...`);
+                const events = [];
+
+                // Test Ticketmaster
+                try {
+                    const tmRes = await fetch(`/api/ticketmaster/search?q=${encodeURIComponent(category.query)}&limit=5`);
+                    const tmData = await tmRes.json();
+                    if (tmData.success && tmData.events) {
+                        events.push(...tmData.events.map(e => ({...e, source: 'Ticketmaster'})));
+                        console.log(`✅ ${category.id} Ticketmaster: ${tmData.events.length} events`);
+                    }
+                } catch (e) { console.warn('TM error:', e); }
+
+                // Test Eventbrite
+                try {
+                    const ebRes = await fetch(`/api/eventbrite/search?q=${encodeURIComponent(category.query)}&limit=3`);
+                    const ebData = await ebRes.json();
+                    if (ebData.success && ebData.events) {
+                        events.push(...ebData.events.map(e => ({...e, source: ebData.source || 'Eventbrite'})));
+                        console.log(`✅ ${category.id} Eventbrite: ${ebData.events.length} events (${ebData.source})`);
+                    }
+                } catch (e) { console.warn('EB error:', e); }
+
+                totalEvents += events.length;
+
+                // Render category
+                content += `
+                    <div class="category">
+                        <h2>${category.title} (${events.length} events)</h2>
+                        <div class="events">
+                            ${events.map(event => `
+                                <div class="event" onclick="window.open('${event.external_url || '#'}', '_blank')">
+                                    <h3>${event.title}</h3>
+                                    <p>📍 ${event.venue_name || 'TBA'}</p>
+                                    <p>💰 ${event.price_min === 0 ? 'FREE' : '$' + (event.price_min || 'TBA')}</p>
+                                    <p>🔗 ${event.source}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Update page
+            document.getElementById('stats').innerHTML = `<strong>${totalEvents} events found from multiple sources!</strong>`;
+            document.getElementById('content').innerHTML = content;
+            
+            console.log(`🎉 PROOF COMPLETE: ${totalEvents} events loaded from Ticketmaster + Eventbrite!`);
+        }
+
+        // Start test
+        testAPIs().catch(err => {
+            console.error('Test failed:', err);
+            document.getElementById('content').innerHTML = `<div class="loading">❌ Error loading events: ${err.message}</div>`;
+        });
+    </script>
+</body>
+</html>

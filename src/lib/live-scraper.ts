@@ -100,9 +100,9 @@ export class LiveEventScraper {
               }
             }
             
-            // Also check in the description for price info
+            // Also check in the description for price info (ONLY dollar amounts - no text parsing)
             if (!priceText && description) {
-              const descPriceMatch = description.match(/\$\d+|\bfree\b|admission|ticket|cost/i)
+              const descPriceMatch = description.match(/\$\d+/)
               if (descPriceMatch) {
                 priceText = descPriceMatch[0]
               }
@@ -348,10 +348,12 @@ export class LiveEventScraper {
   }
 
   private parsePrice(priceText: string): { price: number, priceMax: number, priceRange: string } {
-    if (!priceText) return { price: 0, priceMax: 0, priceRange: 'Free' }
-    
-    // Explicit free indicators
-    if (/free|no charge|complimentary|gratis/i.test(priceText)) {
+    // STRICT: If no price text, return undefined values (not free)
+    // EventBrite often shows "Free" for registration but tickets cost money
+    if (!priceText) return { price: undefined, priceMax: undefined, priceRange: '' }
+
+    // Only mark as free if EXPLICITLY stated
+    if (/^(free|no charge|complimentary|gratis)$/i.test(priceText.trim())) {
       return { price: 0, priceMax: 0, priceRange: 'Free' }
     }
     
@@ -404,13 +406,9 @@ export class LiveEventScraper {
       }
     }
     
-    // If we have text but no clear price, check for "TBD" or similar
-    if (/tbd|tba|contact|call|varies/i.test(priceText)) {
-      return { price: 0, priceMax: 0, priceRange: 'TBD' }
-    }
-    
-    // Default to free if unclear
-    return { price: 0, priceMax: 0, priceRange: 'Free' }
+    // If we have text but no clear price, return undefined (not free)
+    // STRICT: Do not default to free - let the UI show "Tickets Available" fallback
+    return { price: undefined, priceMax: undefined, priceRange: '' }
   }
 
   private getVenueInfo(venueName: string): { lat: number; lng: number; address: string } {

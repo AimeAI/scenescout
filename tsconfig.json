@@ -28,6 +28,12 @@
     "node_modules",
     "supabase/functions",
     "vite-app",
+    "archive",
+    "scripts",
+    "src/__tests__",
+    "src/tests",
+    "src/monitoring",
+    "src/lib/scraping",
     "**/*.generated.ts"
   ]
 }

@@ -1,37 +1,41 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { trackEvent, readInteractions, isTrackingEnabled } from '@/lib/tracking/client'
+import { computeAffinity, reorderRows } from '@/lib/tracking/affinity'
+import { PriceBadge } from '@/components/events/PriceBadge'
 
 // Enhanced categories with better naming and coverage
+// Using simple keywords that work with both Ticketmaster and EventBrite
 const CATEGORIES = [
   // Music & Entertainment
-  { id: 'music-concerts', title: 'Music & Concerts', emoji: '🎵', query: 'concerts music live shows' },
-  { id: 'nightlife-dj', title: 'Nightlife & DJ Sets', emoji: '🌃', query: 'nightlife dj club party' },
-  { id: 'comedy-improv', title: 'Comedy & Improv', emoji: '😂', query: 'comedy improv standup' },
-  { id: 'theatre-dance', title: 'Theatre & Dance', emoji: '🎭', query: 'theatre dance performance' },
-  
+  { id: 'music-concerts', title: 'Music & Concerts', emoji: '🎵', query: 'concert' },
+  { id: 'nightlife-dj', title: 'Nightlife & DJ Sets', emoji: '🌃', query: 'dance' },
+  { id: 'comedy-improv', title: 'Comedy & Improv', emoji: '😂', query: 'comedy' },
+  { id: 'theatre-dance', title: 'Theatre & Dance', emoji: '🎭', query: 'theatre' },
+
   // Food & Culture
-  { id: 'food-drink', title: 'Food & Drink (Pop-ups, Tastings)', emoji: '🍽️', query: 'food popup tasting wine beer' },
-  { id: 'arts-exhibits', title: 'Arts & Exhibits', emoji: '🎨', query: 'art gallery exhibit museum' },
-  { id: 'film-screenings', title: 'Film & Screenings', emoji: '🎬', query: 'film movie screening cinema' },
-  { id: 'markets-popups', title: 'Markets & Pop-ups', emoji: '🛍️', query: 'market popup vendor fair' },
-  
+  { id: 'food-drink', title: 'Food & Drink (Pop-ups, Tastings)', emoji: '🍽️', query: 'festival' },
+  { id: 'arts-exhibits', title: 'Arts & Exhibits', emoji: '🎨', query: 'art' },
+  { id: 'film-screenings', title: 'Film & Screenings', emoji: '🎬', query: 'film' },
+  { id: 'markets-popups', title: 'Markets & Pop-ups', emoji: '🛍️', query: 'festival' },
+
   // Active & Wellness
-  { id: 'sports-fitness', title: 'Sports & Fitness', emoji: '🏃', query: 'sports fitness workout gym' },
-  { id: 'outdoors-nature', title: 'Outdoors & Nature', emoji: '🌲', query: 'outdoor hiking nature park' },
-  { id: 'wellness-mindfulness', title: 'Wellness & Mindfulness', emoji: '🧘', query: 'wellness yoga meditation mindfulness' },
-  
+  { id: 'sports-fitness', title: 'Sports & Fitness', emoji: '🏃', query: 'sports' },
+  { id: 'outdoors-nature', title: 'Outdoors & Nature', emoji: '🌲', query: 'festival' },
+  { id: 'wellness-mindfulness', title: 'Wellness & Mindfulness', emoji: '🧘', query: 'expo' },
+
   // Community & Learning
-  { id: 'workshops-classes', title: 'Workshops & Classes', emoji: '📚', query: 'workshop class education learning' },
-  { id: 'tech-startups', title: 'Tech & Startups', emoji: '💻', query: 'tech startup meetup networking' },
-  
+  { id: 'workshops-classes', title: 'Workshops & Classes', emoji: '📚', query: 'expo' },
+  { id: 'tech-startups', title: 'Tech & Startups', emoji: '💻', query: 'tech' },
+
   // Special Categories
-  { id: 'family-kids', title: 'Family & Kids', emoji: '👨‍👩‍👧‍👦', query: 'family kids children activities' },
-  { id: 'date-night', title: 'Date Night Ideas', emoji: '💕', query: 'date night romantic couples' },
-  { id: 'late-night', title: 'Late Night (11pm–4am)', emoji: '🌙', query: 'late night after hours club' },
-  { id: 'neighborhood', title: 'Neighborhood Hotspots', emoji: '📍', query: 'local neighborhood community events' },
-  { id: 'halloween', title: 'Halloween Events', emoji: '🎃', query: 'halloween costume party spooky' }
+  { id: 'family-kids', title: 'Family & Kids', emoji: '👨‍👩‍👧‍👦', query: 'family' },
+  { id: 'date-night', title: 'Date Night Ideas', emoji: '💕', query: 'jazz' },
+  { id: 'late-night', title: 'Late Night (11pm–4am)', emoji: '🌙', query: 'club' },
+  { id: 'neighborhood', title: 'Neighborhood Hotspots', emoji: '📍', query: 'festival' },
+  { id: 'halloween', title: 'Halloween Events', emoji: '🎃', query: 'halloween' }
 ]
 
 export default function HomePage() {
@@ -40,6 +44,9 @@ export default function HomePage() {
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null)
   const [savedEvents, setSavedEvents] = useState<Set<string>>(new Set())
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Create refs for scroll containers - one per category
+  const scrollRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   // Get user location
   useEffect(() => {
@@ -71,7 +78,7 @@ export default function HomePage() {
       'city=San Francisco'
     
     try {
-      const response = await fetch(`/api/search-events?q=${encodeURIComponent(query)}&limit=15&${locationParams}`)
+      const response = await fetch(`/api/search-events?q=${encodeURIComponent(query)}&limit=20&${locationParams}`)
       const data = await response.json()
       
       if (data.success && data.events?.length > 0) {
@@ -123,12 +130,32 @@ export default function HomePage() {
   }, [userLocation])
 
   const handleEventClick = (event: any) => {
+    // Track click interaction for personalization
+    if (isTrackingEnabled() && typeof window !== 'undefined') {
+      trackEvent('click', {
+        eventId: event?.id,
+        category: event?.category || 'unknown',
+        price: event?.price_min,
+        venue: event?.venue_name
+      })
+    }
+
     if (event.external_url) {
       window.open(event.external_url, '_blank')
     }
   }
 
   const handleSaveEvent = (event: any) => {
+    // Track save interaction for personalization
+    if (isTrackingEnabled() && typeof window !== 'undefined') {
+      trackEvent('save', {
+        eventId: event?.id,
+        category: event?.category || 'unknown',
+        price: event?.price_min,
+        venue: event?.venue_name
+      })
+    }
+
     const newSaved = new Set(savedEvents)
     if (savedEvents.has(event.id)) {
       newSaved.delete(event.id)
@@ -137,6 +164,18 @@ export default function HomePage() {
     }
     setSavedEvents(newSaved)
     localStorage.setItem('savedEvents', JSON.stringify([...newSaved]))
+  }
+
+  // Scroll function for arrows
+  const scroll = (categoryId: string, direction: 'left' | 'right') => {
+    const container = scrollRefs.current[categoryId]
+    if (container) {
+      const scrollAmount = 300 // Scroll by one card width plus gap
+      const newScrollLeft = direction === 'left'
+        ? container.scrollLeft - scrollAmount
+        : container.scrollLeft + scrollAmount
+      container.scrollTo({ left: newScrollLeft, behavior: 'smooth' })
+    }
   }
 
   // Load saved events from localStorage
@@ -159,6 +198,19 @@ export default function HomePage() {
 
   const totalEvents = Object.values(categoryEvents).reduce((sum, events) => sum + events.length, 0)
   const freeEvents = Object.values(categoryEvents).flat().filter(e => e.price_min === 0).length
+
+  // Compute personalized row order based on user interactions
+  const displayCategories = useMemo(() => {
+    if (!isTrackingEnabled() || typeof window === 'undefined') {
+      return CATEGORIES
+    }
+
+    const interactions = readInteractions()
+    if (interactions.length === 0) return CATEGORIES
+
+    const affinity = computeAffinity(interactions)
+    return reorderRows(CATEGORIES, affinity, categoryEvents, { discoveryFloor: 0.2 })
+  }, [categoryEvents])
 
   return (
     <AppLayout>
@@ -199,7 +251,14 @@ export default function HomePage() {
                   type="text"
                   placeholder="Search events, venues, or keywords..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setSearchQuery(value)
+                    // Track search for personalization
+                    if (value.trim() && isTrackingEnabled() && typeof window !== 'undefined') {
+                      trackEvent('search', { query: value })
+                    }
+                  }}
                   className="w-full bg-white/10 border border-white/20 rounded-lg pl-4 pr-4 py-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 />
                 {searchQuery && (
@@ -231,25 +290,50 @@ export default function HomePage() {
               <p className="text-sm text-gray-400 mt-2">Loading {CATEGORIES.length} curated categories from Ticketmaster & EventBrite...</p>
             </div>
           ) : (
-            CATEGORIES.map(category => {
+            displayCategories.map(category => {
               const allEvents = categoryEvents[category.id] || []
               const filteredEvents = filterEventsBySearch(allEvents)
-              
-              // Show all categories, even if empty (for better UX)
-              
-              return (
-                <div key={category.id} className="mb-8">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-2xl font-bold flex items-center gap-2">
-                      <span>{category.emoji}</span>
-                      {category.title}
-                    </h2>
-                    <span className="text-gray-400 text-sm">
-                      {filteredEvents.length} events
-                    </span>
-                  </div>
 
-                  <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2">
+              return (
+                <div key={category.id} className="mb-8 relative">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-2xl font-bold flex items-center gap-2">
+                        <span>{category.emoji}</span>
+                        {category.title}
+                      </h2>
+                      <span className="text-gray-400 text-sm">
+                        {filteredEvents.length} events
+                      </span>
+                    </div>
+
+                  {/* Scroll Arrows */}
+                  {filteredEvents.length > 3 && (
+                    <>
+                      <button
+                        onClick={() => scroll(category.id, 'left')}
+                        className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-black/80 hover:bg-black text-white p-3 rounded-full shadow-lg transition-all"
+                        aria-label="Scroll left"
+                      >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => scroll(category.id, 'right')}
+                        className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-black/80 hover:bg-black text-white p-3 rounded-full shadow-lg transition-all"
+                        aria-label="Scroll right"
+                      >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </>
+                  )}
+
+                  <div
+                    ref={(el) => { scrollRefs.current[category.id] = el }}
+                    className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 snap-x snap-mandatory scroll-smooth"
+                  >
                     {filteredEvents.length === 0 ? (
                       <div className="flex-shrink-0 w-72 p-6 bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-600 text-center">
                         <div className="text-3xl mb-2">{category.emoji}</div>
@@ -260,7 +344,8 @@ export default function HomePage() {
                       filteredEvents.map((event, index) => (
                       <div
                         key={`${event.id}-${index}`}
-                        className="flex-shrink-0 w-72 cursor-pointer group"
+                        className="flex-shrink-0 w-72 cursor-pointer group snap-start"
+                        onClick={() => handleEventClick(event)}
                       >
                         <div className="bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-700 transition-all duration-300 group-hover:scale-105 relative">
                           {/* Save Button */}
@@ -297,17 +382,17 @@ export default function HomePage() {
                             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                             
                             {/* Date badge */}
-                            {event.date && (
-                              <div className="absolute top-2 right-2">
-                                <span className="bg-black/70 text-white px-2 py-1 rounded text-xs font-medium">
-                                  {new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                </span>
-                              </div>
-                            )}
+                            <div className="absolute top-2 right-2">
+                              <span className="bg-black/70 text-white px-2 py-1 rounded text-xs font-medium">
+                                {event.date
+                                  ? new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                                  : 'TBA'}
+                              </span>
+                            </div>
                           </div>
 
                           {/* Event Info */}
-                          <div className="p-3" onClick={() => handleEventClick(event)}>
+                          <div className="p-3">
                             <h3 className="font-semibold text-sm mb-1 line-clamp-2 text-white">
                               {event.title}
                             </h3>
@@ -324,15 +409,9 @@ export default function HomePage() {
                             
                             <div className="flex justify-between items-center mt-2">
                               <div className="flex items-center gap-2">
-                                <span className={`text-xs font-medium px-2 py-1 rounded ${
-                                  event.price_min === 0 
-                                    ? 'bg-green-600 text-white' 
-                                    : 'bg-blue-600 text-white'
-                                }`}>
-                                  {event.price_min === 0 ? 'FREE' : `$${event.price_min}`}
-                                </span>
+                                <PriceBadge event={event} size="sm" showTooltip={false} />
                                 
-                                {event.time && (
+                                {event.time && event.time !== '19:00:00' && (
                                   <span className="text-xs text-gray-400">
                                     {new Date(`2000-01-01T${event.time}`).toLocaleTimeString('en-US', {
                                       hour: 'numeric',
