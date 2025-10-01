@@ -21,19 +21,21 @@ import {
   NavigationMenuList,
   NavigationMenuTrigger,
 } from '@/components/ui/navigation-menu'
-import { 
-  Menu, 
-  X, 
-  MapPin, 
-  Calendar, 
-  User, 
-  Settings, 
+import {
+  Menu,
+  X,
+  MapPin,
+  Calendar,
+  User,
+  Settings,
   LogOut,
   Bell,
   Plus,
-  Search
+  Search,
+  Heart
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getSavedIds } from '@/lib/saved/store'
 
 // TODO: Replace with actual auth state
 const mockUser = {
@@ -58,6 +60,7 @@ export default function Navigation() {
   const [isScrolled, setIsScrolled] = useState(false)
   const pathname = usePathname()
   const [isAuthenticated, setIsAuthenticated] = useState(false) // TODO: Replace with actual auth state
+  const [savedCount, setSavedCount] = useState(0)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -71,6 +74,29 @@ export default function Navigation() {
   useEffect(() => {
     // Check if user is authenticated
     setIsAuthenticated(!!mockUser)
+  }, [])
+
+  // Update saved count
+  useEffect(() => {
+    const updateSavedCount = () => {
+      if (typeof window !== 'undefined') {
+        setSavedCount(getSavedIds().size)
+      }
+    }
+
+    updateSavedCount()
+
+    // Listen for storage events to update count when saves happen
+    const handleStorageChange = () => updateSavedCount()
+    window.addEventListener('storage', handleStorageChange)
+
+    // Also update on interval to catch same-tab changes
+    const interval = setInterval(updateSavedCount, 1000)
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      clearInterval(interval)
+    }
   }, [])
 
   const isActive = (path: string) => pathname === path || pathname.startsWith(path)
@@ -136,6 +162,26 @@ export default function Navigation() {
                     </NavigationMenuLink>
                   </Link>
                 </NavigationMenuItem>
+
+                {/* My Events (Saved) */}
+                {process.env.NEXT_PUBLIC_FEATURE_SAVED_V1 === 'true' && (
+                  <NavigationMenuItem>
+                    <Link href="/saved" legacyBehavior passHref>
+                      <NavigationMenuLink className={cn(
+                        'group inline-flex h-10 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50',
+                        isActive('/saved') && 'bg-accent/50'
+                      )}>
+                        <Heart className="w-4 h-4 mr-1" />
+                        My Events
+                        {savedCount > 0 && (
+                          <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
+                            {savedCount}
+                          </Badge>
+                        )}
+                      </NavigationMenuLink>
+                    </Link>
+                  </NavigationMenuItem>
+                )}
               </NavigationMenuList>
             </NavigationMenu>
           </div>
@@ -261,7 +307,24 @@ export default function Navigation() {
               >
                 Plans
               </Link>
-              
+
+              {/* My Events (Saved) */}
+              {process.env.NEXT_PUBLIC_FEATURE_SAVED_V1 === 'true' && (
+                <Link
+                  href="/saved"
+                  className="flex items-center px-3 py-2 rounded-md text-base font-medium hover:bg-accent"
+                  onClick={() => setIsOpen(false)}
+                >
+                  <Heart className="w-4 h-4 mr-2" />
+                  My Events
+                  {savedCount > 0 && (
+                    <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
+                      {savedCount}
+                    </Badge>
+                  )}
+                </Link>
+              )}
+
               {/* Cities submenu */}
               <div className="px-3 py-2">
                 <div className="text-sm font-medium text-muted-foreground mb-2">Cities</div>

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { 
+import {
   Home,
   Compass,
   Map,
@@ -22,8 +22,9 @@ import {
   Bell
 } from 'lucide-react'
 import { SidebarItem, SidebarState } from '@/types'
+import { getSavedIds } from '@/lib/saved/store'
 
-const sidebarItems: SidebarItem[] = [
+const getSidebarItems = (savedCount: number): SidebarItem[] => [
   {
     id: 'home',
     title: 'Home',
@@ -45,9 +46,9 @@ const sidebarItems: SidebarItem[] = [
   {
     id: 'my-events',
     title: 'My Events',
-    icon: Calendar,
-    href: '/events/saved',
-    badge: 3,
+    icon: Heart,
+    href: '/saved',
+    badge: savedCount,
   },
   {
     id: 'categories',
@@ -95,6 +96,24 @@ export function Sidebar({ className }: SidebarProps) {
   })
   const [expandedItems, setExpandedItems] = useState<string[]>([])
   const [isMobile, setIsMobile] = useState(false)
+  const [savedCount, setSavedCount] = useState(0)
+
+  // Update saved count
+  useEffect(() => {
+    const updateSavedCount = () => {
+      if (typeof window !== 'undefined') {
+        setSavedCount(getSavedIds().size)
+      }
+    }
+    updateSavedCount()
+    const handleStorageChange = () => updateSavedCount()
+    window.addEventListener('storage', handleStorageChange)
+    const interval = setInterval(updateSavedCount, 1000)
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      clearInterval(interval)
+    }
+  }, [])
 
   // Check if mobile on mount and resize
   useEffect(() => {
@@ -231,7 +250,7 @@ export function Sidebar({ className }: SidebarProps) {
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4">
           <ul className="space-y-1 px-3">
-            {sidebarItems.map((item) => (
+            {getSidebarItems(savedCount).map((item) => (
               <SidebarMenuItem
                 key={item.id}
                 item={item}

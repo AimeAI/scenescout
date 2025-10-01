@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { toggleSaved, isSaved } from '@/lib/saved/store'
+import { trackEvent, isTrackingEnabled } from '@/lib/tracking/client'
 
 interface Event {
   id: string
@@ -42,6 +44,7 @@ const CATEGORIES = [
 export function NetflixCarousel({ events, onEventClick, onLoadMore, hasMore, loading }: NetflixCarouselProps) {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([])
+  const [, forceUpdate] = useState(0)
 
   useEffect(() => {
     filterEvents()
@@ -124,7 +127,7 @@ export function NetflixCarousel({ events, onEventClick, onLoadMore, hasMore, loa
     if (event.image_url && event.image_url.startsWith('http')) {
       return event.image_url
     }
-    
+
     // Generate category-based placeholder
     const categoryImages = {
       sports: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=400&h=200&fit=crop',
@@ -135,8 +138,30 @@ export function NetflixCarousel({ events, onEventClick, onLoadMore, hasMore, loa
       social: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=400&h=200&fit=crop',
       default: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=400&h=200&fit=crop'
     }
-    
+
     return categoryImages[event.category] || categoryImages.default
+  }
+
+  const handleSaveEvent = (e: React.MouseEvent, event: Event) => {
+    e.stopPropagation()
+
+    if (process.env.NEXT_PUBLIC_FEATURE_SAVED_V1 !== 'true') return
+
+    const wasSaved = isSaved(event.id)
+    toggleSaved(event.id)
+
+    // Track save/unsave
+    if (isTrackingEnabled()) {
+      trackEvent(wasSaved ? 'unsave' : 'save', {
+        eventId: event.id,
+        category: event.category,
+        price: event.price_min,
+        venue: event.venue_name
+      })
+    }
+
+    // Force re-render to update heart icon
+    forceUpdate(prev => prev + 1)
   }
 
   return (
@@ -228,6 +253,17 @@ export function NetflixCarousel({ events, onEventClick, onLoadMore, hasMore, loa
                           {event.category}
                         </span>
                       </div>
+
+                      {/* Save Button */}
+                      {process.env.NEXT_PUBLIC_FEATURE_SAVED_V1 === 'true' && (
+                        <button
+                          onClick={(e) => handleSaveEvent(e, event)}
+                          className="absolute bottom-2 right-2 bg-black/70 hover:bg-black text-white p-2 rounded-full transition-colors z-10"
+                          aria-label={isSaved(event.id) ? 'Unsave event' : 'Save event'}
+                        >
+                          {isSaved(event.id) ? '❤️' : '🤍'}
+                        </button>
+                      )}
 
                       {/* Date/Time Overlay */}
                       <div className="absolute bottom-2 left-2 right-2">
