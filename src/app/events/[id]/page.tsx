@@ -9,6 +9,7 @@ import { Event } from '@/types'
 import { cn } from '@/lib/utils'
 import { isSaved, toggleSaved, getSavedIds } from '@/lib/saved/store'
 import { trackEvent, isTrackingEnabled } from '@/lib/tracking/client'
+import { generateICS } from '@/lib/calendar/export'
 
 export default function EventDetailPage() {
   const params = useParams()
@@ -112,6 +113,28 @@ export default function EventDetailPage() {
       }
     } else {
       navigator.clipboard.writeText(shareUrl)
+    }
+  }
+
+  const handleAddToCalendar = () => {
+    if (!event) return
+
+    const result = generateICS(event)
+
+    if (result.success) {
+      console.log(`📅 Calendar event downloaded: ${result.filename}`)
+
+      // Track calendar export
+      if (isTrackingEnabled() && typeof window !== 'undefined') {
+        trackEvent('calendar_export', {
+          eventId: event.id,
+          category: event.category || 'unknown',
+          venue: event.venue_name
+        })
+      }
+    } else {
+      console.error('Failed to generate calendar event:', result.error)
+      alert('Failed to create calendar event. Please try again.')
     }
   }
 
@@ -252,8 +275,21 @@ export default function EventDetailPage() {
               {/* External Links */}
               <div className="space-y-4">
                 <h2 className="text-2xl font-bold">Event Links</h2>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Add to Calendar Button */}
+                  <Button
+                    onClick={handleAddToCalendar}
+                    variant="outline"
+                    className="justify-start h-auto p-4 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-purple-500/30 hover:border-purple-500/50 transition-all"
+                  >
+                    <Calendar className="w-5 h-5 mr-3 text-purple-400" />
+                    <div className="text-left">
+                      <div className="font-medium">Add to Calendar</div>
+                      <div className="text-sm text-white/60">Download .ics file</div>
+                    </div>
+                  </Button>
+
                   {event.external_url && (
                     <Button asChild className="justify-start h-auto p-4">
                       <a href={event.external_url} target="_blank" rel="noopener noreferrer">
