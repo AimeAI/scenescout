@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { trackEvent, readInteractions, isTrackingEnabled } from '@/lib/tracking/client'
 import { computeAffinity, reorderRows } from '@/lib/tracking/affinity'
@@ -13,6 +14,7 @@ import { QuickChips, type Chip } from '@/components/filters/QuickChips'
 import { Thumbs } from '@/components/events/Thumbs'
 import { toggleSaved, isSaved } from '@/lib/saved/store'
 import { CategoryRail } from '@/components/events/CategoryRail'
+import { clearAllEventCache } from '@/lib/events/clearCache'
 
 // Enhanced categories with better naming and coverage
 // Using simple keywords that work with both Ticketmaster and EventBrite
@@ -54,6 +56,7 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [activeChip, setActiveChip] = useState<Chip | null>(null)
+  const router = useRouter()
 
   // Create refs for scroll containers - one per category
   const scrollRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -146,6 +149,12 @@ export default function HomePage() {
   }, [userLocation])
 
   const handleEventClick = (event: any) => {
+    console.log('🎯 EVENT CLICKED:', {
+      id: event?.id,
+      title: event?.title,
+      hasRouter: !!router
+    })
+
     // Track click interaction for personalization
     if (isTrackingEnabled() && typeof window !== 'undefined') {
       trackEvent('click', {
@@ -156,8 +165,18 @@ export default function HomePage() {
       })
     }
 
-    if (event.external_url) {
-      window.open(event.external_url, '_blank')
+    // Navigate to event detail page
+    if (event?.id) {
+      // Store full event data in sessionStorage so detail page can use it immediately
+      // This avoids 404s from the API endpoint for events it can't find
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(`event_${event.id}`, JSON.stringify(event))
+      }
+
+      console.log('🚀 NAVIGATING TO:', `/events/${event.id}`)
+      router.push(`/events/${event.id}`)
+    } else {
+      console.warn('⚠️ NO EVENT ID - cannot navigate')
     }
   }
 

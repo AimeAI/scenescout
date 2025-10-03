@@ -7,53 +7,95 @@ import { Button } from '@/components/ui/button'
 import { Calendar, Clock, MapPin, Users, DollarSign, ExternalLink, ArrowLeft, Share, Heart } from 'lucide-react'
 import { Event } from '@/types'
 import { cn } from '@/lib/utils'
+import { isSaved, toggleSaved, getSavedIds } from '@/lib/saved/store'
+import { trackEvent, isTrackingEnabled } from '@/lib/tracking/client'
 
 export default function EventDetailPage() {
   const params = useParams()
   const router = useRouter()
   const [event, setEvent] = useState<Event | null>(null)
   const [loading, setLoading] = useState(true)
-  const [saved, setSaved] = useState(false)
   const [shareUrl, setShareUrl] = useState('')
+  const [savedState, setSavedState] = useState(false)
 
   useEffect(() => {
     if (params.id) {
       fetchEvent(params.id as string)
       setShareUrl(window.location.href)
+      // Check if event is saved
+      setSavedState(isSaved(params.id as string))
     }
   }, [params.id])
 
   const fetchEvent = async (eventId: string) => {
     try {
       setLoading(true)
-      
-      // First try to get the specific event from API
-      const response = await fetch(`/api/events?limit=1000`)
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch events')
-      }
 
-      const { events } = await response.json()
-      const foundEvent = events.find((e: Event) => e.id === eventId)
-      
-      if (!foundEvent) {
-        router.push('/404')
+      // First, check if we have the event in sessionStorage (from homepage navigation)
+      const cachedEvent = sessionStorage.getItem(`event_${eventId}`)
+      if (cachedEvent) {
+        console.log('✅ Using cached event data from sessionStorage')
+        const eventData = JSON.parse(cachedEvent)
+
+        // Normalize flat event structure to include nested venue object for compatibility
+        const normalizedEvent = {
+          ...eventData,
+          event_date: eventData.date || eventData.event_date,
+          venue: {
+            name: eventData.venue_name,
+            address: eventData.address || eventData.venue_address,
+            latitude: eventData.latitude,
+            longitude: eventData.longitude
+          }
+        }
+
+        setEvent(normalizedEvent)
+        setLoading(false)
         return
       }
 
-      setEvent(foundEvent)
+      // If not in cache, fetch from our API endpoint
+      console.log('📡 Fetching event from API...')
+      const response = await fetch(`/api/events/${eventId}`)
+
+      if (!response.ok) {
+        console.error('Event not found:', response.status)
+        router.push('/')
+        return
+      }
+
+      const data = await response.json()
+
+      if (!data.success || !data.event) {
+        console.error('Invalid event data:', data)
+        router.push('/')
+        return
+      }
+
+      setEvent(data.event)
     } catch (error) {
       console.error('Error fetching event:', error)
-      router.push('/404')
+      router.push('/')
     } finally {
       setLoading(false)
     }
   }
 
   const handleSave = () => {
-    setSaved(!saved)
-    // TODO: Implement actual save functionality
+    if (event?.id) {
+      toggleSaved(event.id)
+      setSavedState(!savedState)
+
+      // Track save/unsave interaction
+      if (isTrackingEnabled() && typeof window !== 'undefined') {
+        trackEvent(savedState ? 'unsave' : 'save', {
+          eventId: event.id,
+          category: event.category || 'unknown',
+          price: event.price_min,
+          venue: event.venue_name
+        })
+      }
+    }
   }
 
   const handleShare = async () => {
@@ -164,10 +206,10 @@ export default function EventDetailPage() {
                   size="sm"
                   className={cn(
                     "bg-black/50 backdrop-blur-sm border-white/20",
-                    saved && "bg-red-500/50 border-red-500/50"
+                    savedState && "bg-red-500/50 border-red-500/50"
                   )}
                 >
-                  <Heart className={cn("w-4 h-4", saved && "fill-current")} />
+                  <Heart className={cn("w-4 h-4", savedState && "fill-current")} />
                 </Button>
               </div>
             </div>
