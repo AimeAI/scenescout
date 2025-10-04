@@ -106,12 +106,18 @@ export function Sidebar({ className }: SidebarProps) {
       }
     }
     updateSavedCount()
+
+    // Listen for custom event (same tab updates)
+    const handleSavedEventsChanged = () => updateSavedCount()
+    window.addEventListener('savedEventsChanged', handleSavedEventsChanged)
+
+    // Listen for storage event (different tab updates)
     const handleStorageChange = () => updateSavedCount()
     window.addEventListener('storage', handleStorageChange)
-    const interval = setInterval(updateSavedCount, 1000)
+
     return () => {
+      window.removeEventListener('savedEventsChanged', handleSavedEventsChanged)
       window.removeEventListener('storage', handleStorageChange)
-      clearInterval(interval)
     }
   }, [])
 
