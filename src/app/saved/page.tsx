@@ -21,10 +21,35 @@ export default function SavedPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load saved events from localStorage
-    const events = getSavedEvents();
-    setSavedEvents(events);
-    setLoading(false);
+    // Load saved events from database first, then merge with localStorage
+    const loadSavedEvents = async () => {
+      try {
+        const userId = localStorage.getItem('user_id') || 'anonymous';
+
+        // Fetch from database
+        const response = await fetch(`/api/saved-events?userId=${userId}`);
+        const data = await response.json();
+
+        if (data.success && data.events?.length > 0) {
+          // Extract event_data from database records
+          const dbEvents = data.events.map((record: any) => record.event_data);
+          setSavedEvents(dbEvents);
+        } else {
+          // Fallback to localStorage if database is empty
+          const localEvents = getSavedEvents();
+          setSavedEvents(localEvents);
+        }
+      } catch (error) {
+        console.error('Failed to load saved events:', error);
+        // Fallback to localStorage on error
+        const localEvents = getSavedEvents();
+        setSavedEvents(localEvents);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSavedEvents();
   }, []);
 
   const handleUnsave = (eventId: string) => {

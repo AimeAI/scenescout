@@ -18,6 +18,19 @@ import { getEventVote, toggleVote, isThumbsEnabled } from '@/lib/thumbs'
 import { markEventAsSeen, isSeenStoreEnabled } from '@/lib/tracking/seen-store'
 import { trackEvent, isTrackingEnabled } from '@/lib/tracking/client'
 
+// Format date from YYYY-MM-DD string without timezone conversion
+function formatEventDate(dateStr: string): string {
+  // Split the date string to avoid timezone issues
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const date = new Date(year, month - 1, day) // month is 0-indexed
+
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric'
+  })
+}
+
 export interface EventCardProps {
   event: any
   onClick?: (event: any) => void
@@ -169,7 +182,7 @@ export function EventCard({
 
         {event.date && (
           <p className="text-xs text-gray-500">
-            📅 {new Date(event.date).toLocaleDateString()}
+            📅 {formatEventDate(event.date)}
           </p>
         )}
 

@@ -11,12 +11,20 @@ export async function GET(request: NextRequest) {
     const city = searchParams.get('city') || 'San Francisco'
 
     // Initialize Supabase client
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    // Use anon key instead - service role key has parsing issues in Next.js
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-    // Build query
+    console.log('🔑 Supabase URL:', url)
+    console.log('🔑 Anon Key length:', key?.length, 'chars')
+
+    if (!url || !key) {
+      throw new Error('Missing Supabase credentials')
+    }
+
+    const supabase = createClient(url, key)
+
+    // Build query - filter by subcategory (stores the original category key)
     let query = supabase
       .from('events')
       .select('*')
@@ -24,13 +32,10 @@ export async function GET(request: NextRequest) {
       .order('date', { ascending: true })
       .limit(limit)
 
-    // Filter by category if provided
+    // Filter by subcategory if provided
     if (category) {
-      query = query.eq('category', category)
+      query = query.eq('subcategory', category)
     }
-
-    // Filter by city
-    query = query.eq('city_name', city)
 
     const { data: events, error } = await query
 

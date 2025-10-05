@@ -83,7 +83,7 @@ function convertTicketmasterEvent(tmEvent: TicketmasterEvent): any {
   return {
     id: `tm_${tmEvent.id}`,
     title: tmEvent.name,
-    description: tmEvent.description || '',
+    description: tmEvent.info || tmEvent.pleaseNote || tmEvent.description || `${tmEvent.name} at ${venue?.name || 'TBA'}`,
     category: sceneScoutCategory,
     subcategory: classification?.genre?.name || classification?.subGenre?.name,
     date: tmEvent.dates.start.localDate,
@@ -117,6 +117,8 @@ export async function GET(request: NextRequest) {
     const lat = searchParams.get('lat')
     const lng = searchParams.get('lng')
     const classificationName = searchParams.get('classificationName')
+    const startDate = searchParams.get('startDate') // YYYY-MM-DD
+    const endDate = searchParams.get('endDate') // YYYY-MM-DD
 
     if (!API_KEY) {
       return NextResponse.json(
@@ -133,6 +135,14 @@ export async function GET(request: NextRequest) {
       sort: 'date,asc',
       countryCode: 'US,CA'
     })
+
+    // Add date range if provided (Ticketmaster format: YYYY-MM-DDTHH:mm:ssZ)
+    if (startDate) {
+      params.append('startDateTime', `${startDate}T00:00:00Z`)
+    }
+    if (endDate) {
+      params.append('endDateTime', `${endDate}T23:59:59Z`)
+    }
 
     // Add location parameters
     if (lat && lng) {

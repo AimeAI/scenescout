@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "bootstrap:local": "npm run db:apply && npm run edge:deploy",
     "db:apply": "node scripts/apply-schema.js",
+    "db:migrate": "dotenv -e .env.local tsx scripts/apply-migration.ts",
     "edge:deploy": "supabase functions deploy --no-verify-jwt",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -75,12 +76,14 @@
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "autoprefixer": "^10.4.19",
+    "dotenv-cli": "^10.0.0",
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.5",
     "jest": "^29.7.0",
     "postcss": "^8.4.40",
     "supabase": "^1.187.10",
     "tailwindcss": "^3.4.7",
+    "tsx": "^4.20.6",
     "typescript": "^5.5.4"
   },
   "engines": {

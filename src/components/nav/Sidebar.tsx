@@ -20,9 +20,14 @@ export function Sidebar() {
   return (
     <aside className="hidden md:block w-64 shrink-0 p-3 border-r border-white/10">
       <div className="text-sm font-semibold mb-2 opacity-80">Navigation</div>
-      <Item href="/" label="Home" />
-      <Item href="/search" label="Search" />
-      <Item href="/saved" label="Saved" />
+      <Item href="/" label="🏠 Home" />
+      <Item href="/search" label="🔍 Search" />
+      <Item href="/saved" label="❤️ Saved" />
+
+      <div className="text-sm font-semibold mb-2 mt-6 opacity-80">Quick Filters</div>
+      <Item href="/?filter=near" label="📍 Near Me Now" />
+      <Item href="/?filter=tonight" label="🌙 Tonight" />
+      <Item href="/?filter=free" label="🆓 Free Events" />
     </aside>
   );
 }

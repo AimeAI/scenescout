@@ -57,11 +57,27 @@ export default function EventDetailPage() {
 
       // If not in cache, fetch from our API endpoint
       console.log('📡 Fetching event from API...')
-      const response = await fetch(`/api/events/${eventId}`)
+      const response = await fetch(`/api/events/${eventId}`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
 
       if (!response.ok) {
         console.error('Event not found:', response.status)
-        router.push('/')
+        // Show error message before redirecting
+        if (typeof window !== 'undefined') {
+          const toast = document.createElement('div')
+          toast.className = 'fixed top-4 right-4 bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg z-50'
+          toast.textContent = '❌ Event not found'
+          document.body.appendChild(toast)
+          setTimeout(() => {
+            toast.remove()
+            router.push('/')
+          }, 2000)
+        } else {
+          router.push('/')
+        }
         return
       }
 
@@ -69,14 +85,36 @@ export default function EventDetailPage() {
 
       if (!data.success || !data.event) {
         console.error('Invalid event data:', data)
-        router.push('/')
+        if (typeof window !== 'undefined') {
+          const toast = document.createElement('div')
+          toast.className = 'fixed top-4 right-4 bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg z-50'
+          toast.textContent = '❌ Invalid event data'
+          document.body.appendChild(toast)
+          setTimeout(() => {
+            toast.remove()
+            router.push('/')
+          }, 2000)
+        } else {
+          router.push('/')
+        }
         return
       }
 
       setEvent(data.event)
     } catch (error) {
       console.error('Error fetching event:', error)
-      router.push('/')
+      if (typeof window !== 'undefined') {
+        const toast = document.createElement('div')
+        toast.className = 'fixed top-4 right-4 bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg z-50'
+        toast.textContent = '❌ Failed to load event'
+        document.body.appendChild(toast)
+        setTimeout(() => {
+          toast.remove()
+          router.push('/')
+        }, 2000)
+      } else {
+        router.push('/')
+      }
     } finally {
       setLoading(false)
     }
@@ -84,7 +122,7 @@ export default function EventDetailPage() {
 
   const handleSave = () => {
     if (event?.id) {
-      toggleSaved(event.id)
+      toggleSaved(event.id, event)
       setSavedState(!savedState)
 
       // Track save/unsave interaction
@@ -132,9 +170,30 @@ export default function EventDetailPage() {
           venue: event.venue_name
         })
       }
+
+      // Show success feedback
+      if (typeof window !== 'undefined') {
+        const toast = document.createElement('div')
+        toast.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in'
+        toast.textContent = `✅ ${result.filename} downloaded!`
+        document.body.appendChild(toast)
+        setTimeout(() => {
+          toast.remove()
+        }, 3000)
+      }
     } else {
       console.error('Failed to generate calendar event:', result.error)
-      alert('Failed to create calendar event. Please try again.')
+
+      // Show error feedback
+      if (typeof window !== 'undefined') {
+        const toast = document.createElement('div')
+        toast.className = 'fixed top-4 right-4 bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in'
+        toast.textContent = `❌ Failed to create calendar event. Please try again.`
+        document.body.appendChild(toast)
+        setTimeout(() => {
+          toast.remove()
+        }, 3000)
+      }
     }
   }
 
@@ -213,26 +272,25 @@ export default function EventDetailPage() {
                 Back
               </Button>
               
-              <div className="flex space-x-2">
-                <Button
-                  onClick={handleShare}
-                  variant="outline"
-                  size="sm"
-                  className="bg-black/50 backdrop-blur-sm border-white/20"
-                >
-                  <Share className="w-4 h-4" />
-                </Button>
-                
+              {/* Sticky action buttons - Mobile and Desktop */}
+              <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-3 lg:bottom-8 lg:right-8">
                 <Button
                   onClick={handleSave}
-                  variant="outline"
-                  size="sm"
+                  size="lg"
                   className={cn(
-                    "bg-black/50 backdrop-blur-sm border-white/20",
-                    savedState && "bg-red-500/50 border-red-500/50"
+                    "bg-white/10 backdrop-blur-md border-2 border-white/30 hover:border-white/50 shadow-xl transition-all duration-200 hover:scale-105 rounded-full w-14 h-14 p-0",
+                    savedState && "bg-red-600/90 border-red-400/50 hover:bg-red-600"
                   )}
                 >
-                  <Heart className={cn("w-4 h-4", savedState && "fill-current")} />
+                  <Heart className={cn("w-6 h-6 text-white", savedState && "fill-current")} />
+                </Button>
+
+                <Button
+                  onClick={handleShare}
+                  size="lg"
+                  className="bg-white/10 backdrop-blur-md border-2 border-white/30 hover:border-white/50 shadow-xl transition-all duration-200 hover:scale-105 rounded-full w-14 h-14 p-0"
+                >
+                  <Share className="w-6 h-6 text-white" />
                 </Button>
               </div>
             </div>
@@ -263,20 +321,77 @@ export default function EventDetailPage() {
             {/* Main Content */}
             <div className="lg:col-span-2 space-y-8">
               {/* Description */}
-              {event.description && (
-                <div>
-                  <h2 className="text-2xl font-bold mb-4">About This Event</h2>
-                  <p className="text-white/80 leading-relaxed text-lg">
+              <div>
+                <h2 className="text-2xl font-bold mb-4">About This Event</h2>
+                {event.description && event.description.length > 50 ? (
+                  <p className="text-white/80 leading-relaxed text-lg whitespace-pre-line">
                     {event.description}
                   </p>
-                </div>
-              )}
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-white/80 leading-relaxed text-lg">
+                      {event.title} is a {event.category || 'special'} event
+                      {event.venue_name && ` taking place at ${event.venue_name}`}
+                      {event.city_name && ` in ${event.city_name}`}.
+                    </p>
+                    {event.subcategory && (
+                      <p className="text-white/70 text-base">
+                        Genre: <span className="text-purple-400">{event.subcategory}</span>
+                      </p>
+                    )}
+                    {event.is_free ? (
+                      <p className="text-green-400 font-medium">
+                        ✨ This is a free event - no tickets required!
+                      </p>
+                    ) : event.price_min !== undefined && (
+                      <p className="text-white/70">
+                        💵 Tickets start at ${event.price_min}
+                        {event.price_max && event.price_max > event.price_min && ` - $${event.price_max}`}
+                      </p>
+                    )}
+                    {event.capacity && (
+                      <p className="text-white/70">
+                        👥 Venue capacity: {event.capacity.toLocaleString()} people
+                      </p>
+                    )}
+                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mt-4">
+                      <p className="text-blue-300 text-sm">
+                        ℹ️ Detailed description not available. Visit the event page for more information.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* External Links */}
               <div className="space-y-4">
-                <h2 className="text-2xl font-bold">Event Links</h2>
+                <h2 className="text-2xl font-bold">Get Tickets & Save Event</h2>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Buy Tickets Button - Primary CTA */}
+                  {event.external_url ? (
+                    <Button
+                      asChild
+                      className="justify-start h-auto p-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 border-0 col-span-1 sm:col-span-2"
+                    >
+                      <a href={event.external_url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="w-5 h-5 mr-3" />
+                        <div className="text-left flex-1">
+                          <div className="font-semibold text-base">Buy Tickets</div>
+                          <div className="text-sm text-white/80">
+                            {event.source ? `On ${event.source}` : 'Get tickets now'}
+                          </div>
+                        </div>
+                      </a>
+                    </Button>
+                  ) : (
+                    <div className="col-span-1 sm:col-span-2 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+                      <p className="text-sm text-white/60">
+                        🎫 Ticket information not available. Please check the venue's website for details.
+                      </p>
+                    </div>
+                  )}
+
                   {/* Add to Calendar Button */}
                   <Button
                     onClick={handleAddToCalendar}
@@ -290,20 +405,6 @@ export default function EventDetailPage() {
                     </div>
                   </Button>
 
-                  {event.external_url && (
-                    <Button asChild className="justify-start h-auto p-4">
-                      <a href={event.external_url} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="w-5 h-5 mr-3" />
-                        <div className="text-left">
-                          <div className="font-medium">Event Page</div>
-                          <div className="text-sm text-white/60">
-                            {event.source || 'External Site'}
-                          </div>
-                        </div>
-                      </a>
-                    </Button>
-                  )}
-                  
                   {event.url && event.url !== event.external_url && (
                     <Button asChild variant="outline" className="justify-start h-auto p-4">
                       <a href={event.url} target="_blank" rel="noopener noreferrer">

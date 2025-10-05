@@ -2,6 +2,8 @@ import './globals.css'
 import { Inter } from 'next/font/google'
 import { Metadata, Viewport } from 'next'
 import { QueryProvider } from '@/providers/QueryProvider'
+import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration'
+import { NotificationTestButton } from '@/components/NotificationTestButton'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -30,9 +32,11 @@ export default function RootLayout({ children }: RootLayoutProps) {
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body className={`${inter.className} bg-black text-white antialiased`}>
+        <ServiceWorkerRegistration />
         <QueryProvider>
           {children}
         </QueryProvider>
+        {process.env.NODE_ENV === 'development' && <NotificationTestButton />}
       </body>
     </html>
   )

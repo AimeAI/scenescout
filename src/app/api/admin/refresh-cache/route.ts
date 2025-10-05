@@ -1,8 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import * as fs from 'fs'
+import * as path from 'path'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5 minutes for full cache refresh
+
+// Read service role key from .env.local directly to avoid Next.js truncation
+function getServiceRoleKey(): string {
+  try {
+    const envPath = path.join(process.cwd(), '.env.local')
+    const envContent = fs.readFileSync(envPath, 'utf-8')
+
+    for (const line of envContent.split('\n')) {
+      if (line.startsWith('SUPABASE_SERVICE_ROLE_KEY=')) {
+        const key = line.split('=')[1].trim().replace(/^["']|["']$/g, '')
+        console.log('📁 Read service key from file, length:', key.length)
+        return key
+      }
+    }
+  } catch (error) {
+    console.log('⚠️  Could not read .env.local, using anon key')
+  }
+
+  return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+}
 
 // Categories to cache
 const CATEGORIES = [
@@ -30,10 +52,12 @@ export async function POST(request: NextRequest) {
   try {
     console.log('🔄 Starting cache refresh...')
 
-    // Initialize Supabase client
+    // Get service role key (bypassing Next.js env parsing)
+    const serviceKey = getServiceRoleKey()
+
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      serviceKey
     )
 
     // Get city from request or default to San Francisco
@@ -60,6 +84,28 @@ export async function POST(request: NextRequest) {
 
         // Store events in Supabase
         for (const event of events) {
+          // Map category to enum-safe value (temporary until enum is changed to TEXT)
+          const categoryMap: Record<string, string> = {
+            'music-concerts': 'music',
+            'nightlife-dj': 'nightlife',
+            'comedy-improv': 'comedy',
+            'theatre-dance': 'performing_arts',
+            'food-drink': 'food',
+            'arts-exhibits': 'arts',
+            'film-screenings': 'film',
+            'markets-popups': 'markets',
+            'sports-fitness': 'sports',
+            'outdoors-nature': 'outdoors',
+            'wellness-mindfulness': 'wellness',
+            'workshops-classes': 'education',
+            'tech-startups': 'tech',
+            'family-kids': 'family',
+            'date-night': 'music',
+            'late-night': 'nightlife',
+            'neighborhood': 'community',
+            'halloween': 'seasonal'
+          }
+
           const eventData = {
             id: event.id,
             title: event.title,
@@ -73,7 +119,8 @@ export async function POST(request: NextRequest) {
             price_min: event.price_min || 0,
             price_max: event.price_max || 0,
             external_url: event.external_url || event.url,
-            category: category.key,
+            category: categoryMap[category.key] || 'music', // Use enum-safe category
+            subcategory: category.key, // Store original category in subcategory
             image_url: event.image_url,
             source: event.source,
             provider: event.provider,

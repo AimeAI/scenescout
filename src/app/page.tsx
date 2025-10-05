@@ -86,20 +86,12 @@ export default function HomePage() {
   const loadEvents = async (categoryId: string, query: string) => {
     console.log(`🔍 Loading ${categoryId} events...`)
 
-    const city = userLocation ? null : 'San Francisco' // Use city param if no location
+    const locationParams = userLocation ?
+      `lat=${userLocation.lat}&lng=${userLocation.lng}` :
+      'city=San Francisco'
 
     try {
-      // Use cached events endpoint to avoid rate limiting
-      const params = new URLSearchParams({
-        category: categoryId,
-        limit: '20',
-      })
-
-      if (city) {
-        params.append('city', city)
-      }
-
-      const response = await fetch(`/api/events/cached?${params}`)
+      const response = await fetch(`/api/search-events?q=${encodeURIComponent(query)}&limit=20&${locationParams}`)
       const data = await response.json()
 
       if (data.success && data.events?.length > 0) {
@@ -107,9 +99,9 @@ export default function HomePage() {
           ...prev,
           [categoryId]: data.events
         }))
-        console.log(`✅ ${categoryId}: ${data.events.length} cached events`)
+        console.log(`✅ ${categoryId}: ${data.events.length} events from ${data.sources?.ticketmaster || 0} TM + ${data.sources?.eventbrite || 0} EB`)
       } else {
-        console.log(`ℹ️ No cached events for ${categoryId}`)
+        console.log(`ℹ️ No events found for ${categoryId}`)
         setCategoryEvents(prev => ({
           ...prev,
           [categoryId]: []
