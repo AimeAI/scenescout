@@ -28,6 +28,18 @@ export default function EventDetailPage() {
     }
   }, [params.id])
 
+  // Track view event when event is loaded
+  useEffect(() => {
+    if (event && isTrackingEnabled()) {
+      trackEvent('view', {
+        eventId: event.id,
+        category: event.category || 'unknown',
+        source: event.source || 'unknown',
+        venue: event.venue_name
+      })
+    }
+  }, [event])
+
   const fetchEvent = async (eventId: string) => {
     try {
       setLoading(true)
@@ -138,19 +150,90 @@ export default function EventDetailPage() {
   }
 
   const handleShare = async () => {
-    if (navigator.share && event) {
+    if (!event) return
+
+    if (navigator.share) {
       try {
         await navigator.share({
           title: event.title,
-          text: event.description || `Check out this ${event.category} event!`,
+          text: `${formatDateTime(event.date || event.event_date, event.time)} • ${event.venue_name || 'TBA'}`,
           url: shareUrl,
         })
+
+        // Track successful share
+        if (isTrackingEnabled()) {
+          trackEvent('click', {
+            eventId: event.id,
+            action: 'share',
+            method: 'web_share'
+          })
+        }
+
+        // Show success toast
+        showToast('Link shared successfully!', 'success')
       } catch (error) {
-        // Fallback to clipboard
-        navigator.clipboard.writeText(shareUrl)
+        // User cancelled or share failed, fallback to clipboard
+        if ((error as Error).name !== 'AbortError') {
+          await copyToClipboard()
+        }
       }
     } else {
-      navigator.clipboard.writeText(shareUrl)
+      await copyToClipboard()
+    }
+  }
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+
+      // Track clipboard copy
+      if (isTrackingEnabled() && event) {
+        trackEvent('click', {
+          eventId: event.id,
+          action: 'share',
+          method: 'clipboard'
+        })
+      }
+
+      showToast('Link copied to clipboard!', 'success')
+    } catch (error) {
+      showToast('Failed to copy link', 'error')
+    }
+  }
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    if (typeof window === 'undefined') return
+
+    const toast = document.createElement('div')
+    toast.className = `fixed top-4 right-4 ${type === 'success' ? 'bg-green-600' : 'bg-red-600'} text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in`
+    toast.textContent = message
+    document.body.appendChild(toast)
+    setTimeout(() => toast.remove(), 3000)
+  }
+
+  const formatDateTime = (date?: string, time?: string): string => {
+    if (!date) return 'Date TBA'
+    try {
+      const d = new Date(date)
+      const dateStr = d.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric'
+      })
+      if (time && time !== '19:00:00') {
+        const [hours, minutes] = time.split(':').map(Number)
+        const t = new Date()
+        t.setHours(hours, minutes)
+        const timeStr = t.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        })
+        return `${dateStr} at ${timeStr}`
+      }
+      return dateStr
+    } catch {
+      return 'Date TBA'
     }
   }
 
@@ -381,7 +464,21 @@ export default function EventDetailPage() {
                       asChild
                       className="justify-start h-auto p-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 border-0 col-span-1 sm:col-span-2"
                     >
-                      <a href={event.external_url} target="_blank" rel="noopener noreferrer">
+                      <a
+                        href={event.external_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => {
+                          if (isTrackingEnabled()) {
+                            trackEvent('click', {
+                              eventId: event.id,
+                              action: 'buy_tickets',
+                              url: event.external_url,
+                              source: event.source
+                            })
+                          }
+                        }}
+                      >
                         <ExternalLink className="w-5 h-5 mr-3" />
                         <div className="text-left flex-1">
                           <div className="font-semibold text-base">Buy Tickets</div>
