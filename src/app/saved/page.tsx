@@ -11,36 +11,39 @@ export default function SavedPage() {
   const router = useRouter();
   const [savedEvents, setSavedEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Load saved events from database first, then merge with localStorage
-    const loadSavedEvents = async () => {
-      try {
-        const userId = localStorage.getItem('user_id') || 'anonymous';
+  const loadSavedEvents = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const userId = localStorage.getItem('user_id') || 'anonymous';
 
-        // Fetch from database
-        const response = await fetch(`/api/saved-events?userId=${userId}`);
-        const data = await response.json();
+      // Fetch from database
+      const response = await fetch(`/api/saved-events?userId=${userId}`);
+      const data = await response.json();
 
-        if (data.success && data.events?.length > 0) {
-          // Extract event_data from database records
-          const dbEvents = data.events.map((record: any) => record.event_data);
-          setSavedEvents(dbEvents);
-        } else {
-          // Fallback to localStorage if database is empty
-          const localEvents = getSavedEvents();
-          setSavedEvents(localEvents);
-        }
-      } catch (error) {
-        console.error('Failed to load saved events:', error);
-        // Fallback to localStorage on error
+      if (data.success && data.events?.length > 0) {
+        // Extract event_data from database records
+        const dbEvents = data.events.map((record: any) => record.event_data);
+        setSavedEvents(dbEvents);
+      } else {
+        // Fallback to localStorage if database is empty
         const localEvents = getSavedEvents();
         setSavedEvents(localEvents);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (err) {
+      console.error('Failed to load saved events:', err);
+      setError('Failed to load saved events');
+      // Fallback to localStorage on error
+      const localEvents = getSavedEvents();
+      setSavedEvents(localEvents);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     loadSavedEvents();
   }, []);
 
@@ -62,7 +65,28 @@ export default function SavedPage() {
   if (loading) {
     return (
       <AppLayout>
-        <div className="p-6 text-sm opacity-60">Loading saved events...</div>
+        <div className="p-6 text-center py-12">
+          <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-400">Loading saved events...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <AppLayout>
+        <div className="p-6 text-center py-12 max-w-md mx-auto">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h3 className="text-xl font-semibold mb-2">Error Loading Saved Events</h3>
+          <p className="text-gray-400 mb-6">{error}</p>
+          <button
+            onClick={loadSavedEvents}
+            className="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+          >
+            Retry
+          </button>
+        </div>
       </AppLayout>
     );
   }
@@ -70,9 +94,10 @@ export default function SavedPage() {
   if (savedEvents.length === 0) {
     return (
       <AppLayout>
-        <div className="p-6 text-center">
-          <div className="text-4xl mb-3">💾</div>
-          <div className="text-sm opacity-60">No saved events yet. Save some events to see them here!</div>
+        <div className="p-6 text-center py-12">
+          <div className="text-6xl mb-4">💾</div>
+          <h3 className="text-xl font-semibold mb-2">No Saved Events</h3>
+          <p className="text-gray-400">Save some events to see them here!</p>
         </div>
       </AppLayout>
     );

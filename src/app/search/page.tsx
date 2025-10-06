@@ -16,6 +16,7 @@ export default function SearchPage() {
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
@@ -23,6 +24,7 @@ export default function SearchPage() {
     setLoading(true)
     setHasSearched(true)
     setEvents([])
+    setError(null)
 
     try {
       const response = await fetch(`/api/search-events?q=${encodeURIComponent(searchQuery)}&limit=50`)
@@ -35,8 +37,9 @@ export default function SearchPage() {
         setEvents([])
         console.log('❌ No events found')
       }
-    } catch (error) {
-      console.error('Search failed:', error)
+    } catch (err) {
+      console.error('Search failed:', err)
+      setError('Search failed. Please try again.')
       setEvents([])
     } finally {
       setLoading(false)
@@ -125,8 +128,18 @@ export default function SearchPage() {
           </div>
         )}
 
+        {/* Error State */}
+        {error && !loading && (
+          <div className="text-center py-12 max-w-md mx-auto">
+            <div className="text-6xl mb-4">⚠️</div>
+            <h3 className="text-xl font-semibold mb-2">Search Error</h3>
+            <p className="text-gray-400 mb-6">{error}</p>
+            <Button onClick={handleSearch}>Retry Search</Button>
+          </div>
+        )}
+
         {/* Empty State */}
-        {!loading && hasSearched && events.length === 0 && (
+        {!loading && !error && hasSearched && events.length === 0 && (
           <div className="text-center py-12 max-w-md mx-auto">
             <div className="text-6xl mb-4">🔍</div>
             <h3 className="text-xl font-semibold mb-2">No Events Found</h3>
