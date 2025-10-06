@@ -40,7 +40,8 @@ export function Sidebar() {
   return (
     <aside className="hidden md:block w-64 shrink-0 p-3 border-r border-white/10">
       <div className="text-sm font-semibold mb-2 opacity-80">Navigation</div>
-      <Item href="/" label="🏠 Home" />
+      <Item href="/" label="🏠 Discover" />
+      <Item href="/near-me" label="📍 Near Me Now" />
       <Item href="/saved" label="❤️ My Events" badge={savedCount} />
     </aside>
   );

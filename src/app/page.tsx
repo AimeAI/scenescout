@@ -13,7 +13,6 @@ import { SearchBar } from '@/components/search/SearchBar'
 import { QuickChips, type Chip } from '@/components/filters/QuickChips'
 import { Thumbs } from '@/components/events/Thumbs'
 import { toggleSaved, isSaved } from '@/lib/saved/store'
-import { CategoryRail } from '@/components/events/CategoryRail'
 import { clearAllEventCache } from '@/lib/events/clearCache'
 
 // Enhanced categories with better naming and coverage
