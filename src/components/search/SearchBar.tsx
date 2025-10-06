@@ -28,6 +28,12 @@ export function SearchBar({ onResults }: { onResults: (events: any[]) => void })
         type="text"
         value={q}
         onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            run(q)
+          }
+        }}
         placeholder="Search events..."
         className="w-full px-4 py-2 rounded-lg bg-white/8 border border-white/12 focus:border-purple-500 focus:outline-none"
       />
