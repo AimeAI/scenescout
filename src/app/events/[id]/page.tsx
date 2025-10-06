@@ -263,13 +263,20 @@ export default function EventDetailPage() {
             {/* Back button */}
             <div className="flex justify-between items-start">
               <Button
-                onClick={() => router.back()}
+                onClick={() => {
+                  // If user came from within the app, go back. Otherwise go home.
+                  if (typeof window !== 'undefined' && window.history.length > 2) {
+                    router.back()
+                  } else {
+                    router.push('/')
+                  }
+                }}
                 variant="outline"
                 size="sm"
                 className="bg-black/50 backdrop-blur-sm border-white/20"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
+                {typeof window !== 'undefined' && window.history.length > 2 ? 'Back' : 'Back to Home'}
               </Button>
               
               {/* Sticky action buttons - Mobile and Desktop */}
