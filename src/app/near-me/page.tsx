@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getUserLocation, requestLocation } from '@/src/hooks/useUserLocation';
-import { calculateDistanceKm, walkingTimeLabel } from '@/src/lib/location/distance';
-import { fetchEventsNearbyStartingSoon } from '@/src/lib/events/nearMeNow';
-import { EventCard } from '@/src/components/events/EventCard';
+import { getUserLocation, requestLocation } from '@/hooks/useUserLocation';
+import { calculateDistanceKm, walkingTimeLabel } from '@/lib/location/distance';
+import { fetchEventsNearbyStartingSoon } from '@/lib/events/nearMeNow';
+import { EventCard } from '@/components/events/EventCard';
 
 export default function NearMePage() {
   const router = useRouter();
