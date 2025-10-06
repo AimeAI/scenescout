@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Sidebar } from './Sidebar'
+import { Sidebar } from '@/components/nav/Sidebar'
 import { cn } from '@/lib/utils'
 
 interface AppLayoutProps {
