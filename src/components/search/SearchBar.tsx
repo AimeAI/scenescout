@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { trackEvent } from '@/lib/tracking/client';
 
 export function SearchBar({ onResults }: { onResults: (events: any[]) => void }) {
-  if (process.env.NEXT_PUBLIC_FEATURE_SEARCH_V1 !== 'true') return null;
 
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(false);

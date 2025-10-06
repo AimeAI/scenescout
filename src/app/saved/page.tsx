@@ -8,14 +8,6 @@ import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 
 export default function SavedPage() {
-  if (process.env.NEXT_PUBLIC_FEATURE_SAVED_V1 !== 'true') {
-    return (
-      <AppLayout>
-        <div className="p-6 text-sm opacity-60">Saved is disabled.</div>
-      </AppLayout>
-    );
-  }
-
   const router = useRouter();
   const [savedEvents, setSavedEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

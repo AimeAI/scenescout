@@ -164,24 +164,22 @@ export default function Navigation() {
                 </NavigationMenuItem>
 
                 {/* My Events (Saved) */}
-                {process.env.NEXT_PUBLIC_FEATURE_SAVED_V1 === 'true' && (
-                  <NavigationMenuItem>
-                    <Link href="/saved" legacyBehavior passHref>
-                      <NavigationMenuLink className={cn(
-                        'group inline-flex h-10 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50',
-                        isActive('/saved') && 'bg-accent/50'
-                      )}>
-                        <Heart className="w-4 h-4 mr-1" />
-                        My Events
-                        {savedCount > 0 && (
-                          <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
-                            {savedCount}
-                          </Badge>
-                        )}
-                      </NavigationMenuLink>
-                    </Link>
-                  </NavigationMenuItem>
-                )}
+                <NavigationMenuItem>
+                  <Link href="/saved" legacyBehavior passHref>
+                    <NavigationMenuLink className={cn(
+                      'group inline-flex h-10 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50',
+                      isActive('/saved') && 'bg-accent/50'
+                    )}>
+                      <Heart className="w-4 h-4 mr-1" />
+                      My Events
+                      {savedCount > 0 && (
+                        <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
+                          {savedCount}
+                        </Badge>
+                      )}
+                    </NavigationMenuLink>
+                  </Link>
+                </NavigationMenuItem>
               </NavigationMenuList>
             </NavigationMenu>
           </div>
@@ -309,21 +307,19 @@ export default function Navigation() {
               </Link>
 
               {/* My Events (Saved) */}
-              {process.env.NEXT_PUBLIC_FEATURE_SAVED_V1 === 'true' && (
-                <Link
-                  href="/saved"
-                  className="flex items-center px-3 py-2 rounded-md text-base font-medium hover:bg-accent"
-                  onClick={() => setIsOpen(false)}
-                >
-                  <Heart className="w-4 h-4 mr-2" />
-                  My Events
-                  {savedCount > 0 && (
-                    <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
-                      {savedCount}
-                    </Badge>
-                  )}
-                </Link>
-              )}
+              <Link
+                href="/saved"
+                className="flex items-center px-3 py-2 rounded-md text-base font-medium hover:bg-accent"
+                onClick={() => setIsOpen(false)}
+              >
+                <Heart className="w-4 h-4 mr-2" />
+                My Events
+                {savedCount > 0 && (
+                  <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
+                    {savedCount}
+                  </Badge>
+                )}
+              </Link>
 
               {/* Cities submenu */}
               <div className="px-3 py-2">

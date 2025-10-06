@@ -116,14 +116,8 @@ export default function HomePage() {
     }
   }
 
-  // Load all categories (only when NOT using cached events)
+  // Load all categories
   useEffect(() => {
-    // Skip loading if using CategoryRail (it handles its own loading)
-    if (process.env.NEXT_PUBLIC_FEATURE_CACHED_EVENTS === 'true') {
-      setLoading(false)
-      return
-    }
-
     const loadAllCategories = async () => {
       setLoading(true)
       console.log('🚀 Starting to load all categories...')
@@ -344,34 +338,6 @@ export default function HomePage() {
             {/* Search Bar - New Component */}
             <div className="max-w-md mx-auto mb-4">
               <SearchBar onResults={(results) => setSearchResults(results)} />
-
-              {/* Fallback to existing search if SEARCH_V1 disabled */}
-              {process.env.NEXT_PUBLIC_FEATURE_SEARCH_V1 !== 'true' && (
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search events, venues, or keywords..."
-                    value={searchQuery}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      setSearchQuery(value)
-                      // Track search for personalization
-                      if (value.trim() && isTrackingEnabled() && typeof window !== 'undefined') {
-                        trackEvent('search', { query: value })
-                      }
-                    }}
-                    className="w-full bg-white/10 border border-white/20 rounded-lg pl-4 pr-4 py-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-3 top-3 text-white/60 hover:text-white"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              )}
             </div>
 
             {/* Quick Filter Chips */}
@@ -407,21 +373,6 @@ export default function HomePage() {
             </div>
           ) : (
             displayCategories.map(category => {
-              // Use cached events when feature is enabled
-              if (process.env.NEXT_PUBLIC_FEATURE_CACHED_EVENTS === 'true') {
-                return (
-                  <CategoryRail
-                    key={category.id}
-                    category={category}
-                    userLocation={userLocation}
-                    onEventClick={handleEventClick}
-                    searchQuery={searchQuery}
-                    activeChip={activeChip}
-                  />
-                )
-              }
-
-              // Fallback to old logic when caching disabled
               const allEvents = categoryEvents[category.id] || []
               const filteredEvents = applyFilters(allEvents)
 

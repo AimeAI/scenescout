@@ -145,8 +145,6 @@ export function NetflixCarousel({ events, onEventClick, onLoadMore, hasMore, loa
   const handleSaveEvent = (e: React.MouseEvent, event: Event) => {
     e.stopPropagation()
 
-    if (process.env.NEXT_PUBLIC_FEATURE_SAVED_V1 !== 'true') return
-
     const wasSaved = isSaved(event.id)
     toggleSaved(event.id)
 
@@ -255,15 +253,13 @@ export function NetflixCarousel({ events, onEventClick, onLoadMore, hasMore, loa
                       </div>
 
                       {/* Save Button */}
-                      {process.env.NEXT_PUBLIC_FEATURE_SAVED_V1 === 'true' && (
-                        <button
-                          onClick={(e) => handleSaveEvent(e, event)}
-                          className="absolute bottom-2 right-2 bg-black/70 hover:bg-black text-white p-2 rounded-full transition-colors z-10"
-                          aria-label={isSaved(event.id) ? 'Unsave event' : 'Save event'}
-                        >
-                          {isSaved(event.id) ? '❤️' : '🤍'}
-                        </button>
-                      )}
+                      <button
+                        onClick={(e) => handleSaveEvent(e, event)}
+                        className="absolute bottom-2 right-2 bg-black/70 hover:bg-black text-white p-2 rounded-full transition-colors z-10"
+                        aria-label={isSaved(event.id) ? 'Unsave event' : 'Save event'}
+                      >
+                        {isSaved(event.id) ? '❤️' : '🤍'}
+                      </button>
 
                       {/* Date/Time Overlay */}
                       <div className="absolute bottom-2 left-2 right-2">

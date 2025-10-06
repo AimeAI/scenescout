@@ -5,7 +5,6 @@ import { trackEvent } from '@/lib/tracking/client';
 export type Chip = 'tonight' | 'near' | 'free' | 'now';
 
 export function QuickChips({ onApply }: { onApply: (chip: Chip) => void }) {
-  if (process.env.NEXT_PUBLIC_FEATURE_FILTER_CHIPS_V1 !== 'true') return null;
 
   const chips: { id: Chip; label: string }[] = [
     { id: 'tonight', label: '🌙 Tonight' },

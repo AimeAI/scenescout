@@ -3,7 +3,6 @@
 import { trackEvent } from '@/lib/tracking/client';
 
 export function Thumbs({ event }: { event: any }) {
-  if (process.env.NEXT_PUBLIC_FEATURE_THUMBS_V1 !== 'true') return null;
 
   const onUp = () => trackEvent('vote_up', { eventId: event.id, category: event.category, price: event.price_min, venue: event.venue_name });
   const onDown = () => trackEvent('vote_down', { eventId: event.id, category: event.category, price: event.price_min, venue: event.venue_name });
