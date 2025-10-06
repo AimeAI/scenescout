@@ -354,12 +354,57 @@ export default function HomePage() {
         </div>
 
         {/* Personalized Rails (feature-flagged) */}
-        {!loading && (
+        {!loading && !searchResults.length && (
           <PersonalizedRails
             allEvents={Object.values(categoryEvents).flat()}
             onEventClick={handleEventClick}
             className="mb-8"
           />
+        )}
+
+        {/* Search Results */}
+        {searchResults.length > 0 && (
+          <div className="px-8 py-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-3xl font-bold">Search Results</h2>
+              <button
+                onClick={() => setSearchResults([])}
+                className="text-sm text-purple-400 hover:text-purple-300"
+              >
+                Clear Search
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {searchResults.map((event) => (
+                <div
+                  key={event.id}
+                  className="bg-gray-900 rounded-lg overflow-hidden hover:ring-2 hover:ring-purple-500 transition-all cursor-pointer"
+                  onClick={() => handleEventClick(event)}
+                >
+                  <div className="relative h-40 bg-gray-800">
+                    {event.image_url ? (
+                      <img src={event.image_url} alt={event.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-4xl">
+                        {event.emoji || '🎉'}
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <h3 className="font-semibold text-sm line-clamp-2 mb-2">{event.title}</h3>
+                    {event.venue_name && (
+                      <p className="text-xs text-gray-400 line-clamp-1 mb-1">📍 {event.venue_name}</p>
+                    )}
+                    {event.date && (
+                      <p className="text-xs text-gray-500">
+                        📅 {new Date(event.date).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Event Categories */}

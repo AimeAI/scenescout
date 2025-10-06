@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { EventCard } from '@/components/events/EventCard'
 import { Button } from '@/components/ui/button'
+import { AppLayout } from '@/components/layout/AppLayout'
 import {
   requestUserLocation,
   getStoredLocation,
@@ -311,6 +312,7 @@ export default function NearMePage() {
   // Show location permission request if no location
   if (!userLocation) {
     return (
+      <AppLayout>
       <div className="min-h-screen bg-black text-white p-6">
         <Button
           onClick={() => router.back()}
@@ -363,10 +365,12 @@ export default function NearMePage() {
           </div>
         </div>
       </div>
+      </AppLayout>
     )
   }
 
   return (
+    <AppLayout>
     <div className="min-h-screen bg-black text-white p-6">
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-6">
@@ -527,5 +531,6 @@ export default function NearMePage() {
         )}
       </div>
     </div>
+    </AppLayout>
   )
 }

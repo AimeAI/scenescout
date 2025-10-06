@@ -38,11 +38,18 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="hidden md:block w-64 shrink-0 p-3 border-r border-white/10">
-      <div className="text-sm font-semibold mb-2 opacity-80">Navigation</div>
-      <Item href="/" label="🏠 Discover" />
-      <Item href="/near-me" label="📍 Near Me Now" />
-      <Item href="/saved" label="❤️ My Events" badge={savedCount} />
+    <aside className="hidden md:block w-64 shrink-0 p-3 border-r border-white/10 flex flex-col h-screen">
+      <div className="flex-1">
+        <div className="text-sm font-semibold mb-2 opacity-80">Navigation</div>
+        <Item href="/" label="🏠 Discover" />
+        <Item href="/near-me" label="📍 Near Me Now" />
+        <Item href="/saved" label="❤️ My Events" badge={savedCount} />
+      </div>
+
+      {/* Account section at bottom */}
+      <div className="border-t border-white/10 pt-3 mt-3">
+        <Item href="/account" label="👤 Account" />
+      </div>
     </aside>
   );
 }
