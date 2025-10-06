@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { trackEvent } from '@/lib/tracking/client';
 
 export function SearchBar({ onResults }: { onResults: (events: any[]) => void }) {
-
+  const router = useRouter();
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -19,6 +20,13 @@ export function SearchBar({ onResults }: { onResults: (events: any[]) => void })
     } finally { setLoading(false); }
   };
 
+  const handleSearch = () => {
+    if (q.trim()) {
+      router.push('/search?q=' + encodeURIComponent(q.trim()));
+      trackEvent('search', { query: q.trim() });
+    }
+  };
+
   useEffect(() => { const t = setTimeout(() => run(q), 300); return () => clearTimeout(t); }, [q]);
 
   return (
@@ -29,8 +37,8 @@ export function SearchBar({ onResults }: { onResults: (events: any[]) => void })
         onChange={(e) => setQ(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
-            e.preventDefault()
-            run(q)
+            e.preventDefault();
+            handleSearch();
           }
         }}
         placeholder="Search events..."

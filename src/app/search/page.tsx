@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { EventCard } from '@/components/events/EventCard'
@@ -47,11 +47,11 @@ export default function SearchPage() {
   }
 
   // Auto-search if query param exists
-  useState(() => {
+  useEffect(() => {
     if (initialQuery) {
       handleSearch()
     }
-  }, [])
+  }, [initialQuery])
 
   return (
     <AppLayout>

@@ -156,3 +156,33 @@ export function useUserLocation() {
     refresh: requestLocation
   }
 }
+
+// Standalone helpers for non-hook usage
+export async function getUserLocation(): Promise<{lat:number; lng:number}> {
+  const saved = localStorage.getItem('userLocation');
+  if (saved) {
+    const loc = JSON.parse(saved);
+    return { lat: loc.latitude, lng: loc.longitude };
+  }
+
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('Geolocation not supported'));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const loc = { lat: position.coords.latitude, lng: position.coords.longitude };
+        localStorage.setItem('userLocation', JSON.stringify({ latitude: loc.lat, longitude: loc.lng }));
+        resolve(loc);
+      },
+      () => reject(new Error('Location denied')),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5 * 60 * 1000 }
+    );
+  });
+}
+
+export async function requestLocation(): Promise<{lat:number; lng:number}> {
+  return getUserLocation();
+}

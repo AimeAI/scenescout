@@ -54,7 +54,7 @@ export default function HomePage() {
   const [savedEvents, setSavedEvents] = useState<Set<string>>(new Set())
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
-  const [activeChip, setActiveChip] = useState<Chip | null>(null)
+  const [chip, setChip] = useState<Chip | null>(null)
   const router = useRouter()
 
   // Create refs for scroll containers - one per category
@@ -191,18 +191,13 @@ export default function HomePage() {
     setSavedEvents(new Set([...savedEvents]))
   }
 
-  // Filter events by chip selection
-  const applyChipFilter = (chip: Chip) => {
-    setActiveChip(activeChip === chip ? null : chip)
-  }
-
   // Client-side filter logic for chips
   const filterEventsByChip = (events: any[]) => {
-    if (!activeChip) return events
+    if (!chip) return events
 
     const now = new Date()
 
-    switch (activeChip) {
+    switch (chip) {
       case 'tonight': {
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
         const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
@@ -341,7 +336,7 @@ export default function HomePage() {
 
             {/* Quick Filter Chips */}
             <div className="max-w-md mx-auto mb-4">
-              <QuickChips onApply={applyChipFilter} />
+              <QuickChips value={chip} onChange={setChip} />
             </div>
 
             <div className="text-sm text-gray-500">

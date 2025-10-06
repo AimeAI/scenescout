@@ -1,13 +1,15 @@
 'use client';
 
-import { useState } from 'react';
 import { trackEvent } from '@/lib/tracking/client';
 
 export type Chip = 'tonight' | 'near' | 'free' | 'now';
 
-export function QuickChips({ onApply }: { onApply: (chip: Chip) => void }) {
-  const [activeChip, setActiveChip] = useState<Chip | null>(null);
+interface QuickChipsProps {
+  value: Chip | null;
+  onChange: (chip: Chip | null) => void;
+}
 
+export function QuickChips({ value, onChange }: QuickChipsProps) {
   const chips: { id: Chip; label: string }[] = [
     { id: 'tonight', label: '🌙 Tonight' },
     { id: 'now', label: '⚡ Happening Now' },
@@ -16,9 +18,8 @@ export function QuickChips({ onApply }: { onApply: (chip: Chip) => void }) {
   ];
 
   const handleClick = (chipId: Chip) => {
-    const newChip = activeChip === chipId ? null : chipId;
-    setActiveChip(newChip);
-    onApply(chipId);
+    const newChip = value === chipId ? null : chipId;
+    onChange(newChip);
     trackEvent('filteredBy', { filter: chipId });
   };
 
@@ -29,9 +30,9 @@ export function QuickChips({ onApply }: { onApply: (chip: Chip) => void }) {
           key={c.id}
           onClick={() => handleClick(c.id)}
           className={`px-3 py-1.5 text-sm rounded-full border transition-all ${
-            activeChip === c.id
-              ? 'bg-purple-600 border-purple-500 text-white'
-              : 'bg-white/8 hover:bg-white/14 border-white/12'
+            value === c.id
+              ? 'bg-white text-black border-white'
+              : 'border-white/15 text-gray-200 hover:bg-white/10'
           }`}
         >
           {c.label}
