@@ -157,8 +157,48 @@ export function useUserLocation() {
   }
 }
 
+// Location override for "Use Downtown" feature
+const LOCATION_OVERRIDE_KEY = 'locationOverride';
+const DOWNTOWN_TORONTO = { lat: 43.6532, lng: -79.3832 };
+
+export function setLocationOverride(coords: { lat: number; lng: number }) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(LOCATION_OVERRIDE_KEY, JSON.stringify(coords));
+  }
+}
+
+export function getLocationOverride(): { lat: number; lng: number } | null {
+  if (typeof window === 'undefined') return null;
+
+  const saved = localStorage.getItem(LOCATION_OVERRIDE_KEY);
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+export function clearLocationOverride() {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(LOCATION_OVERRIDE_KEY);
+  }
+}
+
+export function useDowntownToronto() {
+  setLocationOverride(DOWNTOWN_TORONTO);
+}
+
 // Standalone helpers for non-hook usage
 export async function getUserLocation(): Promise<{lat:number; lng:number}> {
+  // Check for override first
+  const override = getLocationOverride();
+  if (override) {
+    return override;
+  }
+
   const saved = localStorage.getItem('userLocation');
   if (saved) {
     const loc = JSON.parse(saved);
@@ -185,4 +225,32 @@ export async function getUserLocation(): Promise<{lat:number; lng:number}> {
 
 export async function requestLocation(): Promise<{lat:number; lng:number}> {
   return getUserLocation();
+}
+
+/**
+ * Get current effective location (override > permission > null)
+ */
+export function getCurrentLocation(): { lat: number; lng: number } | null {
+  if (typeof window === 'undefined') return null;
+
+  // Check override first
+  const override = getLocationOverride();
+  if (override) return override;
+
+  // Check saved permission location
+  const saved = localStorage.getItem('userLocation');
+  if (saved) {
+    try {
+      const loc = JSON.parse(saved);
+      return { lat: loc.latitude, lng: loc.longitude };
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+export function isLocationReady(): boolean {
+  return getCurrentLocation() !== null;
 }

@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { isSaved, toggleSaved, getSavedIds } from '@/lib/saved/store'
 import { trackEvent, isTrackingEnabled } from '@/lib/tracking/client'
 import { generateICS } from '@/lib/calendar/export'
+import toast from 'react-hot-toast'
 
 export default function EventDetailPage() {
   const params = useParams()
@@ -18,6 +19,7 @@ export default function EventDetailPage() {
   const [loading, setLoading] = useState(true)
   const [shareUrl, setShareUrl] = useState('')
   const [savedState, setSavedState] = useState(false)
+  const [calendarButtonClicked, setCalendarButtonClicked] = useState(false)
 
   useEffect(() => {
     if (params.id) {
@@ -240,13 +242,17 @@ export default function EventDetailPage() {
   const handleAddToCalendar = () => {
     if (!event) return
 
+    // Trigger button animation
+    setCalendarButtonClicked(true)
+    setTimeout(() => setCalendarButtonClicked(false), 600)
+
     const result = generateICS(event)
 
     if (result.success) {
       console.log(`📅 Calendar event downloaded: ${result.filename}`)
 
       // Track calendar export
-      if (isTrackingEnabled() && typeof window !== 'undefined') {
+      if (isTrackingEnabled()) {
         trackEvent('calendar_export', {
           eventId: event.id,
           category: event.category || 'unknown',
@@ -254,29 +260,24 @@ export default function EventDetailPage() {
         })
       }
 
-      // Show success feedback
-      if (typeof window !== 'undefined') {
-        const toast = document.createElement('div')
-        toast.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in'
-        toast.textContent = `✅ ${result.filename} downloaded!`
-        document.body.appendChild(toast)
-        setTimeout(() => {
-          toast.remove()
-        }, 3000)
-      }
+      // Show success toast
+      toast.success(
+        '📅 Added to calendar! Check your calendar app.',
+        {
+          duration: 4000,
+          icon: '✅',
+        }
+      )
     } else {
       console.error('Failed to generate calendar event:', result.error)
 
-      // Show error feedback
-      if (typeof window !== 'undefined') {
-        const toast = document.createElement('div')
-        toast.className = 'fixed top-4 right-4 bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in'
-        toast.textContent = `❌ Failed to create calendar event. Please try again.`
-        document.body.appendChild(toast)
-        setTimeout(() => {
-          toast.remove()
-        }, 3000)
-      }
+      // Show error toast
+      toast.error(
+        `Failed to create calendar event: ${result.error}`,
+        {
+          duration: 4000,
+        }
+      )
     }
   }
 
@@ -500,12 +501,18 @@ export default function EventDetailPage() {
                   <Button
                     onClick={handleAddToCalendar}
                     variant="outline"
-                    className="justify-start h-auto p-4 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-purple-500/30 hover:border-purple-500/50 transition-all"
+                    className={cn(
+                      "justify-start h-auto p-4 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-purple-500/30 hover:border-purple-500/50 transition-all",
+                      calendarButtonClicked && "scale-95 bg-purple-600/30 border-purple-400"
+                    )}
                   >
-                    <Calendar className="w-5 h-5 mr-3 text-purple-400" />
+                    <Calendar className={cn(
+                      "w-5 h-5 mr-3 text-purple-400 transition-transform",
+                      calendarButtonClicked && "scale-110"
+                    )} />
                     <div className="text-left">
                       <div className="font-medium">Add to Calendar</div>
-                      <div className="text-sm text-white/60">Download .ics file</div>
+                      <div className="text-sm text-white/60">Includes 15min reminder</div>
                     </div>
                   </Button>
 

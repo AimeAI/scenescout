@@ -151,3 +151,20 @@ export function isHappeningSoon(date?: string | Date): boolean {
     return false
   }
 }
+
+/**
+ * Check if event is within a certain number of hours from now
+ */
+export function isWithinHours(isoUtc: string, tz: string, hours: number): boolean {
+  if (!isoUtc) return false
+
+  try {
+    const now = Date.now()
+    const start = new Date(isoUtc).getTime()
+    const diffH = (start - now) / (1000 * 60 * 60)
+
+    return diffH >= 0 && diffH <= hours
+  } catch {
+    return false
+  }
+}

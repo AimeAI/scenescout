@@ -38,12 +38,15 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="hidden md:block w-64 shrink-0 p-3 border-r border-white/10 flex flex-col h-screen">
+    <aside className="hidden lg:block fixed left-0 top-0 w-64 p-3 border-r border-white/10 flex flex-col h-screen bg-black z-40">
       <div className="flex-1">
         <div className="text-sm font-semibold mb-2 opacity-80">Navigation</div>
         <Item href="/" label="🏠 Discover" />
-        <Item href="/near-me" label="📍 Near Me Now" />
+        <Item href="/surprise" label="⚡ Surprise Me" />
+        <Item href="/now" label="🔥 Happening Now" />
+        <Item href="/near-me" label="📍 Near Me" />
         <Item href="/saved" label="❤️ My Events" badge={savedCount} />
+        <Item href="/taste" label="✨ My Taste" />
       </div>
 
       {/* Account section at bottom */}

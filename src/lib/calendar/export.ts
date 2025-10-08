@@ -1,4 +1,4 @@
-import { createEvent, EventAttributes } from 'ics'
+import { createEvent, EventAttributes, DateArray } from 'ics'
 
 interface EventData {
   id: string
@@ -6,7 +6,9 @@ interface EventData {
   description?: string
   date?: string
   event_date?: string
+  start_date?: string
   time?: string
+  start_time?: string
   venue_name?: string
   venue?: {
     name?: string
@@ -16,73 +18,127 @@ interface EventData {
   venue_address?: string
   external_url?: string
   url?: string
+  ticket_url?: string
+  timezone?: string
+  city?: string
 }
 
 /**
  * Generate ICS calendar file from event data
  * Downloads a .ics file that can be imported to any calendar app
+ *
+ * Includes:
+ * - Proper timezone handling
+ * - 15-minute reminder before event
+ * - Event URL in description
+ * - Venue address in location
  */
 export function generateICS(event: EventData) {
   try {
     // Parse date and time
-    const eventDate = event.date || event.event_date
+    const eventDate = event.date || event.event_date || event.start_date
+    const eventTime = event.time || event.start_time
+
     if (!eventDate) {
       throw new Error('Event date is required')
     }
 
-    const [year, month, day] = eventDate.split('-').map(Number)
+    // Handle both ISO format (2025-10-06T19:00:00) and separate date/time
+    let startDate: Date
 
-    // Parse time or default to 7:00 PM
-    let hour = 19
-    let minute = 0
+    if (eventDate.includes('T')) {
+      // ISO format with time
+      startDate = new Date(eventDate)
+    } else {
+      // Separate date and time
+      const [year, month, day] = eventDate.split('-').map(Number)
 
-    if (event.time) {
-      const [timeStr] = event.time.split(':')
-      const parsedHour = parseInt(timeStr, 10)
-      const parsedMinute = event.time.includes(':')
-        ? parseInt(event.time.split(':')[1], 10)
-        : 0
+      // Parse time or default to 7:00 PM
+      let hour = 19
+      let minute = 0
 
-      if (!isNaN(parsedHour)) hour = parsedHour
-      if (!isNaN(parsedMinute)) minute = parsedMinute
+      if (eventTime) {
+        const timeParts = eventTime.split(':')
+        const parsedHour = parseInt(timeParts[0], 10)
+        const parsedMinute = timeParts[1] ? parseInt(timeParts[1], 10) : 0
+
+        if (!isNaN(parsedHour)) hour = parsedHour
+        if (!isNaN(parsedMinute)) minute = parsedMinute
+      }
+
+      startDate = new Date(year, month - 1, day, hour, minute)
     }
 
-    // Start time
-    const start: [number, number, number, number, number] = [year, month, day, hour, minute]
-
-    // End time (2 hours later)
-    const endHour = (hour + 2) % 24
-    const end: [number, number, number, number, number] = [
-      endHour < hour ? year : year,
-      endHour < hour && day === new Date(year, month - 1, 0).getDate() ? month + 1 : month,
-      endHour < hour ? day + 1 : day,
-      endHour,
-      minute
+    // Start time in UTC
+    const start: DateArray = [
+      startDate.getFullYear(),
+      startDate.getMonth() + 1,
+      startDate.getDate(),
+      startDate.getHours(),
+      startDate.getMinutes()
     ]
 
-    // Build location string
+    // End time (2 hours later)
+    const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000)
+    const end: DateArray = [
+      endDate.getFullYear(),
+      endDate.getMonth() + 1,
+      endDate.getDate(),
+      endDate.getHours(),
+      endDate.getMinutes()
+    ]
+
+    // Build location string with full address
     const venueName = event.venue_name || event.venue?.name || ''
     const venueAddress = event.address || event.venue_address || event.venue?.address || ''
-    const location = [venueName, venueAddress].filter(Boolean).join(', ')
+    const city = event.city || ''
+    const locationParts = [venueName, venueAddress, city].filter(Boolean)
+    const location = locationParts.join(', ') || 'Location TBA'
 
-    // Build description
-    const description = event.description || `Check out ${event.title}!`
-    const ticketUrl = event.external_url || event.url || ''
-    const fullDescription = ticketUrl
-      ? `${description}\n\nGet tickets: ${ticketUrl}`
-      : description
+    // Build description with event URL
+    const description = event.description || `Join us for ${event.title}!`
+    const ticketUrl = event.external_url || event.url || event.ticket_url || ''
+    const eventUrl = ticketUrl || `https://scenescout.app/events/${event.id}`
 
-    // Create event config
+    const fullDescription = [
+      description,
+      '',
+      '📍 Location:',
+      location,
+      '',
+      '🎫 Get tickets:',
+      ticketUrl || 'Check SceneScout for details',
+      '',
+      '🔗 Event page:',
+      eventUrl,
+      '',
+      '---',
+      'Added via SceneScout - Discover urban culture & events',
+      'https://scenescout.app'
+    ].join('\n')
+
+    // Determine timezone
+    const timezone = event.timezone || 'America/Toronto'
+
+    // Create event config with reminder
     const eventConfig: EventAttributes = {
       start,
       end,
       title: event.title,
       description: fullDescription,
-      location: location || 'Location TBA',
-      url: ticketUrl,
+      location,
+      url: eventUrl,
       status: 'CONFIRMED',
       busyStatus: 'BUSY',
       organizer: { name: 'SceneScout', email: 'events@scenescout.app' },
+      // Add 15-minute reminder
+      alarms: [
+        {
+          action: 'display',
+          description: `Reminder: ${event.title} starts in 15 minutes!`,
+          trigger: { minutes: 15, before: true }
+        }
+      ]
     }
 
     // Generate ICS file

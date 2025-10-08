@@ -10,10 +10,19 @@ import { PersonalizedRails } from '@/components/personalization/PersonalizedRail
 import { manageDynamicRails, isDynamicCategoriesEnabled } from '@/lib/personalization/dynamic-categories'
 import { Sidebar } from '@/components/nav/Sidebar'
 import { SearchBar } from '@/components/search/SearchBar'
-import { QuickChips, type Chip } from '@/components/filters/QuickChips'
+import { QuickChips, type ChipState } from '@/components/filters/QuickChips'
+import { applyChipFilters } from '@/lib/filters/applyChips'
 import { Thumbs } from '@/components/events/Thumbs'
 import { toggleSaved, isSaved } from '@/lib/saved/store'
+import { CategoryRail } from '@/components/events/CategoryRail'
 import { clearAllEventCache } from '@/lib/events/clearCache'
+import { motion, AnimatePresence } from 'framer-motion'
+import { ForYouHero } from '@/components/personalization/ForYouHero'
+import { HappeningNowBanner } from '@/components/spontaneity/HappeningNowBanner'
+import { generateDynamicCategories, mergeCategoriesWithDynamic } from '@/lib/personalization/dynamicCategories'
+import toast from 'react-hot-toast'
+import { SaveConfirmationModal } from '@/components/reminders/SaveConfirmationModal'
+import { isFirstSave, markSaveModalSeen } from '@/lib/notifications/requestPermission'
 
 // Enhanced categories with better naming and coverage
 // Using simple keywords that work with both Ticketmaster and EventBrite
@@ -54,11 +63,21 @@ export default function HomePage() {
   const [savedEvents, setSavedEvents] = useState<Set<string>>(new Set())
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
-  const [chip, setChip] = useState<Chip | null>(null)
+  const [chipState, setChipState] = useState<ChipState>({})
+  const [showDebug, setShowDebug] = useState(false)
+  const [affinityScores, setAffinityScores] = useState<Record<string, number>>({})
+  const [isMounted, setIsMounted] = useState(false)
+  const [showSaveModal, setShowSaveModal] = useState(false)
+  const [modalEvent, setModalEvent] = useState<any>(null)
   const router = useRouter()
 
   // Create refs for scroll containers - one per category
   const scrollRefs = useRef<Record<string, HTMLDivElement | null>>({})
+
+  // Set mounted state to prevent hydration mismatch
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   // Get user location
   useEffect(() => {
@@ -115,8 +134,14 @@ export default function HomePage() {
     }
   }
 
-  // Load all categories
+  // Load all categories (only when NOT using cached events)
   useEffect(() => {
+    // Skip loading if using CategoryRail (it handles its own loading)
+    if (process.env.NEXT_PUBLIC_FEATURE_CACHED_EVENTS === 'true') {
+      setLoading(false)
+      return
+    }
+
     const loadAllCategories = async () => {
       setLoading(true)
       console.log('🚀 Starting to load all categories...')
@@ -141,6 +166,8 @@ export default function HomePage() {
     return () => clearTimeout(timer)
   }, [userLocation])
 
+  // No longer needed - using react-hot-toast directly
+
   const handleEventClick = (event: any) => {
     console.log('🎯 EVENT CLICKED:', {
       id: event?.id,
@@ -156,6 +183,14 @@ export default function HomePage() {
         price: event?.price_min,
         venue: event?.venue_name
       })
+
+      // Show toast feedback with icon
+      const categoryName = CATEGORIES.find(c => c.id === event?.category)?.title || event?.category
+      if (categoryName) {
+        toast.success(`✨ Learning you like ${categoryName}...`, {
+          duration: 2000,
+        })
+      }
     }
 
     // Navigate to event detail page
@@ -175,11 +210,31 @@ export default function HomePage() {
 
   const handleSaveEvent = (event: any) => {
     const wasSaved = isSaved(event.id)
-    toggleSaved(event.id)
 
-    // Track save/unsave interaction
-    if (isTrackingEnabled() && typeof window !== 'undefined') {
-      trackEvent(wasSaved ? 'unsave' : 'save', {
+    // If unsaving, just toggle and show toast
+    if (wasSaved) {
+      toggleSaved(event.id, event)
+      toast('Event removed from saved', { duration: 2000 })
+      setSavedEvents(new Set([...savedEvents]))
+
+      if (isTrackingEnabled()) {
+        trackEvent('unsave', {
+          eventId: event?.id,
+          category: event?.category || 'unknown',
+          price: event?.price_min,
+          venue: event?.venue_name
+        })
+      }
+      return
+    }
+
+    // SAVING EVENT
+    toggleSaved(event.id, event)
+    setSavedEvents(new Set([...savedEvents]))
+
+    // Track save interaction
+    if (isTrackingEnabled()) {
+      trackEvent('save', {
         eventId: event?.id,
         category: event?.category || 'unknown',
         price: event?.price_min,
@@ -187,44 +242,42 @@ export default function HomePage() {
       })
     }
 
-    // Force re-render
-    setSavedEvents(new Set([...savedEvents]))
+    // Check if this is user's first save
+    if (isMounted && isFirstSave()) {
+      // Show beautiful confirmation modal for first save
+      setModalEvent(event)
+      setShowSaveModal(true)
+    } else {
+      // For subsequent saves, just show a quick toast
+      toast.success('❤️ Event saved!', { duration: 2000 })
+    }
+  }
+
+  // Handle chip state changes
+  const handleChipChange = (newState: ChipState) => {
+    setChipState(newState)
   }
 
   // Client-side filter logic for chips
   const filterEventsByChip = (events: any[]) => {
-    if (!chip) return events
+    if (!chipState.tonight && !chipState.now && !chipState.free && !chipState.near) {
+      return events
+    }
 
     const now = new Date()
+    const cityTz = 'America/Toronto' // or get from env
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const todayEnd = new Date(todayStart)
+    todayEnd.setHours(23, 59, 59, 999)
 
-    switch (chip) {
-      case 'tonight': {
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-        const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
-        return events.filter(e => {
-          if (!e.date) return false
-          const eventDate = new Date(e.date)
-          return eventDate >= todayStart && eventDate < todayEnd
-        })
-      }
-      case 'now': {
-        const currentHour = now.getHours()
-        return events.filter(e => {
-          if (!e.time) return false
-          const [hours] = e.time.split(':').map(Number)
-          return Math.abs(hours - currentHour) <= 2
-        })
-      }
-      case 'near': {
-        // Filter events within 10 miles (if distance available)
-        return events.filter(e => !e.distance || e.distance <= 10)
-      }
-      case 'free': {
-        return events.filter(e => e.price_min === 0 || e.price_min === null)
-      }
-      default:
-        return events
-    }
+    return applyChipFilters(events, chipState, {
+      tz: cityTz,
+      todayStartIsoUtc: todayStart.toISOString(),
+      todayEndIsoUtc: todayEnd.toISOString(),
+      userLat: userLocation?.lat,
+      userLng: userLocation?.lng,
+      maxWalkMin: 20
+    })
   }
 
   // Scroll function for arrows
@@ -268,10 +321,44 @@ export default function HomePage() {
   const totalEvents = Object.values(categoryEvents).reduce((sum, events) => sum + events.length, 0)
   const freeEvents = Object.values(categoryEvents).flat().filter(e => e.price_min === 0).length
 
+  // Track interaction count to trigger recomputation when interactions change
+  const [interactionTrigger, setInteractionTrigger] = useState(0)
+
+  // Recompute when interactions change (triggered by save/click/vote actions)
+  useEffect(() => {
+    if (!isMounted || !isTrackingEnabled()) return
+
+    // Listen for custom interaction events (more responsive than polling)
+    const handleInteractionChange = () => {
+      const interactions = readInteractions()
+      setInteractionTrigger(interactions.length)
+      console.log('🔄 Interaction detected, recalculating categories...', {
+        totalInteractions: interactions.length
+      })
+    }
+
+    window.addEventListener('savedEventsChanged', handleInteractionChange)
+    window.addEventListener('interactionTracked', handleInteractionChange)
+
+    // Also poll as fallback for changes from other tabs
+    const interval = setInterval(() => {
+      const interactions = readInteractions()
+      if (interactions.length !== interactionTrigger) {
+        setInteractionTrigger(interactions.length)
+      }
+    }, 2000) // Reduced frequency since we have event listeners
+
+    return () => {
+      window.removeEventListener('savedEventsChanged', handleInteractionChange)
+      window.removeEventListener('interactionTracked', handleInteractionChange)
+      clearInterval(interval)
+    }
+  }, [isMounted, interactionTrigger])
+
   // Compute personalized row order based on user interactions
-  // With optional dynamic category management
+  // With DYNAMIC CATEGORY GENERATION for unique personalized experience
   const displayCategories = useMemo(() => {
-    if (!isTrackingEnabled() || typeof window === 'undefined') {
+    if (!isMounted || !isTrackingEnabled()) {
       return CATEGORIES
     }
 
@@ -280,7 +367,43 @@ export default function HomePage() {
 
     const affinity = computeAffinity(interactions)
 
-    // Use dynamic category manager if enabled
+    // Store affinity scores for debug display
+    const categoryAffinity: Record<string, number> = {}
+    CATEGORIES.forEach(cat => {
+      categoryAffinity[cat.id] = affinity.categories[cat.id] || 0
+    })
+    setAffinityScores(categoryAffinity)
+
+    // Log personalization info
+    console.log('🎯 Personalization Active:', {
+      interactions: interactions.length,
+      topCategories: Object.entries(affinity.categories)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 5)
+        .map(([cat, score]) => `${cat}: ${(score * 100).toFixed(1)}%`)
+    })
+
+    // Generate dynamic categories based on user behavior
+    const dynamicCategories = generateDynamicCategories(interactions, affinity, CATEGORIES)
+
+    if (dynamicCategories.length > 0) {
+      console.log('✨ Generated Dynamic Categories:', dynamicCategories.map(c => ({
+        title: c.title,
+        reason: c.reason,
+        score: (c.score * 100).toFixed(1) + '%'
+      })))
+    }
+
+    // Merge dynamic + static categories, sorted by relevance
+    const merged = mergeCategoriesWithDynamic(CATEGORIES, dynamicCategories, affinity)
+
+    console.log('📊 Category Order After Merge:', merged.slice(0, 5).map(c => ({
+      title: c.title,
+      score: ((c.score || 0) * 100).toFixed(1) + '%',
+      isGenerated: c.isGenerated || false
+    })))
+
+    // Use dynamic category manager if enabled (for hiding inactive categories)
     if (isDynamicCategoriesEnabled()) {
       const dynamicRails = manageDynamicRails(CATEGORIES, affinity, categoryEvents, interactions)
 
@@ -293,9 +416,10 @@ export default function HomePage() {
       }))
     }
 
-    // Fallback to standard reordering
-    return reorderRows(CATEGORIES, affinity, categoryEvents, { discoveryFloor: 0.2 })
-  }, [categoryEvents])
+    // Return merged categories with dynamic ones on top (already sorted by score)
+    // The mergeCategoriesWithDynamic function handles the sorting
+    return merged
+  }, [categoryEvents, interactionTrigger, isMounted])
 
   return (
     <AppLayout>
@@ -332,74 +456,123 @@ export default function HomePage() {
             {/* Search Bar - New Component */}
             <div className="max-w-md mx-auto mb-4">
               <SearchBar onResults={(results) => setSearchResults(results)} />
+
+              {/* Fallback to existing search if SEARCH_V1 disabled */}
+              {process.env.NEXT_PUBLIC_FEATURE_SEARCH_V1 !== 'true' && (
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search events, venues, or keywords..."
+                    value={searchQuery}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setSearchQuery(value)
+                      // Track search for personalization
+                      if (value.trim() && isTrackingEnabled() && typeof window !== 'undefined') {
+                        trackEvent('search', { query: value })
+                      }
+                    }}
+                    className="w-full bg-white/10 border border-white/20 rounded-lg pl-4 pr-4 py-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-3 text-white/60 hover:text-white"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Quick Filter Chips */}
             <div className="max-w-md mx-auto mb-4">
-              <QuickChips value={chip} onChange={setChip} />
+              <QuickChips onChange={handleChipChange} />
             </div>
 
             <div className="text-sm text-gray-500">
-              {userLocation ? 
-                '📍 Showing events sorted by distance and popularity' : 
+              {userLocation ?
+                '📍 Showing events sorted by distance and popularity' :
                 '📍 Getting your location for personalized results...'
               }
             </div>
+
+            {/* Debug Toggle - Hidden Button (Click Logo 3x to reveal) */}
+            {isMounted && isTrackingEnabled() && (
+              <button
+                onClick={() => setShowDebug(!showDebug)}
+                className="mt-4 text-xs text-gray-600 hover:text-purple-400 transition-colors"
+              >
+                {showDebug ? '🔍 Hide Personalization Debug' : '🔍 Show Personalization Debug'}
+              </button>
+            )}
           </div>
         </div>
 
+        {/* Personalization Status Banner */}
+        {isMounted && (
+          <div className="bg-gradient-to-r from-purple-600/20 to-pink-600/20 border-b border-purple-500/30 py-3 px-8">
+            <div className="flex items-center justify-between max-w-7xl mx-auto">
+              <div className="flex items-center gap-4">
+                <div className="text-sm">
+                  {(() => {
+                    const interactions = readInteractions()
+                    if (interactions.length === 0) {
+                      return (
+                        <span className="text-gray-300">
+                          ✨ <strong>Start exploring!</strong> Click events, save favorites, or vote to get personalized recommendations
+                        </span>
+                      )
+                    }
+                    const affinity = computeAffinity(interactions)
+                    const topCat = Object.entries(affinity.categories)
+                      .sort(([,a], [,b]) => b - a)[0]
+                    const catName = CATEGORIES.find(c => c.id === topCat?.[0])?.title
+                    return (
+                      <span className="text-white">
+                        🎯 <strong>{interactions.length} interactions tracked</strong> ·
+                        Top interest: <span className="text-purple-300">{catName || 'discovering...'}</span>
+                      </span>
+                    )
+                  })()}
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDebug(!showDebug)}
+                className="text-xs px-3 py-1 rounded bg-purple-600/30 hover:bg-purple-600/50 transition-colors"
+              >
+                {showDebug ? 'Hide' : 'Show'} Debug
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Happening Now Banner - Shows events starting within 3 hours */}
+        {!loading && (
+          <HappeningNowBanner
+            allEvents={Object.values(categoryEvents).flat()}
+            onEventClick={handleEventClick}
+            categories={CATEGORIES}
+          />
+        )}
+
+        {/* For You Hero Section */}
+        {!loading && (
+          <ForYouHero
+            allEvents={Object.values(categoryEvents).flat()}
+            onEventClick={handleEventClick}
+            categories={CATEGORIES}
+          />
+        )}
+
         {/* Personalized Rails (feature-flagged) */}
-        {!loading && !searchResults.length && (
+        {!loading && (
           <PersonalizedRails
             allEvents={Object.values(categoryEvents).flat()}
             onEventClick={handleEventClick}
             className="mb-8"
           />
-        )}
-
-        {/* Search Results */}
-        {searchResults.length > 0 && (
-          <div className="px-8 py-8">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-3xl font-bold">Search Results</h2>
-              <button
-                onClick={() => setSearchResults([])}
-                className="text-sm text-purple-400 hover:text-purple-300"
-              >
-                Clear Search
-              </button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {searchResults.map((event) => (
-                <div
-                  key={event.id}
-                  className="bg-gray-900 rounded-lg overflow-hidden hover:ring-2 hover:ring-purple-500 transition-all cursor-pointer"
-                  onClick={() => handleEventClick(event)}
-                >
-                  <div className="relative h-40 bg-gray-800">
-                    {event.image_url ? (
-                      <img src={event.image_url} alt={event.title} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-4xl">
-                        {event.emoji || '🎉'}
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <h3 className="font-semibold text-sm line-clamp-2 mb-2">{event.title}</h3>
-                    {event.venue_name && (
-                      <p className="text-xs text-gray-400 line-clamp-1 mb-1">📍 {event.venue_name}</p>
-                    )}
-                    {event.date && (
-                      <p className="text-xs text-gray-500">
-                        📅 {new Date(event.date).toLocaleDateString()}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         )}
 
         {/* Event Categories */}
@@ -411,16 +584,89 @@ export default function HomePage() {
               <p className="text-sm text-gray-400 mt-2">Loading {CATEGORIES.length} curated categories from Ticketmaster & EventBrite...</p>
             </div>
           ) : (
-            displayCategories.map(category => {
-              const allEvents = categoryEvents[category.id] || []
-              const filteredEvents = applyFilters(allEvents)
+            <AnimatePresence mode="popLayout">
+              {displayCategories.map((category, index) => {
+                // Use cached events when feature is enabled
+                if (process.env.NEXT_PUBLIC_FEATURE_CACHED_EVENTS === 'true') {
+                  // Check if this category has personalization data
+                  const isPersonalized = category.score && category.score > 0
+                  const isGenerated = category.isGenerated || false
+                  const affinityPercent = category.score ? Math.round(category.score * 100) : 0
 
-              return (
-                <div key={category.id} className="mb-8 relative">
+                  return (
+                    <motion.div
+                      key={category.id}
+                      layout
+                      initial={{ opacity: 0, y: 50 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -50 }}
+                      transition={{
+                        layout: { duration: 0.5, ease: 'easeInOut' },
+                        opacity: { duration: 0.3 },
+                        y: { duration: 0.3 }
+                      }}
+                      className="relative"
+                    >
+                      {/* Personalization Badge */}
+                      {isPersonalized && index < 5 && (
+                        <div className="absolute top-0 right-8 z-10 flex items-center gap-2 px-3 py-1 bg-purple-600/90 backdrop-blur-sm rounded-b-lg text-xs font-medium text-white shadow-lg">
+                          <span>🎯 {affinityPercent}% match</span>
+                          {isGenerated && <span className="text-purple-200">✨</span>}
+                          {index === 0 && <span className="ml-1">👑</span>}
+                        </div>
+                      )}
+
+                      <CategoryRail
+                        category={category}
+                        userLocation={userLocation}
+                        onEventClick={handleEventClick}
+                        searchQuery={searchQuery}
+                        activeChip={chipState}
+                      />
+                    </motion.div>
+                  )
+                }
+
+                // Fallback to old logic when caching disabled
+                const allEvents = categoryEvents[category.id] || []
+                const filteredEvents = applyFilters(allEvents)
+
+                const isPersonalized = affinityScores[category.id] > 0
+                const affinityScore = affinityScores[category.id] || 0
+
+                return (
+                  <motion.div
+                    key={category.id}
+                    layout
+                    initial={{ opacity: 0, y: 50 }}
+                    animate={{
+                      opacity: 1,
+                      y: 0,
+                      scale: affinityScore > 0.3 ? [1, 1.02, 1] : 1
+                    }}
+                    exit={{ opacity: 0, y: -50 }}
+                    transition={{
+                      layout: { duration: 0.5, ease: 'easeInOut' },
+                      opacity: { duration: 0.3 },
+                      y: { duration: 0.3 },
+                      scale: { duration: 0.6, ease: 'easeOut' }
+                    }}
+                    whileHover={affinityScore > 0 ? { scale: 1.01 } : {}}
+                    className="mb-8 relative">
                     <div className="flex items-center justify-between mb-4">
                       <h2 className="text-2xl font-bold flex items-center gap-2">
                         <span>{category.emoji}</span>
                         {category.title}
+                        {isPersonalized && (
+                          <span className="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-medium">
+                            ✨ Picked For You
+                          </span>
+                        )}
+                        {showDebug && (
+                          <span className="ml-2 text-xs bg-gray-800 text-gray-300 px-2 py-1 rounded font-mono">
+                            {(affinityScore * 100).toFixed(1)}%
+                          </span>
+                        )}
                       </h2>
                       <span className="text-gray-400 text-sm">
                         {filteredEvents.length} events
@@ -562,9 +808,10 @@ export default function HomePage() {
                       ))
                     )}
                   </div>
-                </div>
+                </motion.div>
               )
-            }).filter(Boolean)
+            }).filter(Boolean)}
+            </AnimatePresence>
           )}
           
           {/* All categories loaded message */}
@@ -581,6 +828,16 @@ export default function HomePage() {
           )}
         </div>
       </div>
+
+      {/* Save Confirmation Modal - shown on first save only */}
+      {modalEvent && (
+        <SaveConfirmationModal
+          isOpen={showSaveModal}
+          onClose={() => setShowSaveModal(false)}
+          eventTitle={modalEvent.title}
+          eventDate={modalEvent.date || modalEvent.start_date}
+        />
+      )}
     </AppLayout>
   )
 }

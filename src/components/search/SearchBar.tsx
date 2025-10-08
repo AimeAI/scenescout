@@ -1,54 +1,34 @@
-'use client';
+'use client'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useState } from 'react'
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { trackEvent } from '@/lib/tracking/client';
+export function SearchBar({ placeholder = 'Search events...' }: { placeholder?: string }) {
+  const router = useRouter()
+  const params = useSearchParams()
+  const [q, setQ] = useState(params.get('q') || '')
 
-export function SearchBar({ onResults }: { onResults: (events: any[]) => void }) {
-  const router = useRouter();
-  const [q, setQ] = useState('');
-  const [loading, setLoading] = useState(false);
+  function go() {
+    const query = q.trim()
+    router.push(query ? `/search?q=${encodeURIComponent(query)}` : '/search')
+  }
 
-  const run = async (term: string) => {
-    if (!term.trim()) { onResults([]); return; }
-    setLoading(true);
-    try {
-      const r = await fetch(`/api/search-events?search=${encodeURIComponent(term)}&limit=100`);
-      const data = await r.json();
-      onResults(data?.events || []);
-      trackEvent('search', { query: term });
-    } finally { setLoading(false); }
-  };
-
-  const handleSearch = () => {
-    if (q.trim()) {
-      router.push('/search?q=' + encodeURIComponent(q.trim()));
-      trackEvent('search', { query: q.trim() });
-    }
-  };
-
-  useEffect(() => { const t = setTimeout(() => run(q), 300); return () => clearTimeout(t); }, [q]);
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    go()
+  }
 
   return (
-    <div className="relative">
+    <form onSubmit={onSubmit} className="w-full flex gap-2">
       <input
-        type="text"
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            handleSearch();
-          }
-        }}
-        placeholder="Search events..."
-        className="w-full px-4 py-2 rounded-lg bg-white/8 border border-white/12 focus:border-purple-500 focus:outline-none"
+        placeholder={placeholder}
+        className="w-full rounded-md bg-zinc-900/60 px-4 py-3 outline-none"
+        aria-label="Search events"
       />
-      {loading && (
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs opacity-60">
-          Searching...
-        </div>
-      )}
-    </div>
-  );
+      <button type="submit" className="rounded-md bg-indigo-600 px-4 py-3 text-white">
+        Search
+      </button>
+    </form>
+  )
 }

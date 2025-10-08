@@ -91,13 +91,13 @@ export function CategoryRail({
 
   const handleSaveEvent = (event: any) => {
     const wasSaved = isSaved(event.id)
-    toggleSaved(event.id)
+    toggleSaved(event.id, event) // Pass full event object for proper tracking
 
     // Track save/unsave interaction
     if (isTrackingEnabled() && typeof window !== 'undefined') {
       trackEvent(wasSaved ? 'unsave' : 'save', {
         eventId: event?.id,
-        category: event?.category || 'unknown',
+        category: event?.category || category.id, // Use category.id as fallback
         price: event?.price_min,
         venue: event?.venue_name
       })

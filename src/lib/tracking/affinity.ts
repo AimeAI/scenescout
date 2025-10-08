@@ -27,11 +27,14 @@ export interface ReorderOptions {
 }
 
 // Interaction weights (aligned with Netflix-style recommendations)
-const WEIGHTS: Record<InteractionEvent['type'], number> = {
+const WEIGHTS: Record<string, number> = {
   click: 10,
   save: 50,
   search: 30,
-  view: 1
+  view: 1,
+  vote_up: 75,      // Strong positive signal (even stronger than save)
+  vote_down: -50,   // Negative signal to decrease category affinity
+  unsave: -25       // Removing from saved list decreases affinity
 }
 
 /**
@@ -65,7 +68,7 @@ export function computeAffinity(
     // Exponential decay: weight * 0.5^(age/halfLife)
     const age = now - interaction.timestamp
     const decay = Math.pow(0.5, age / halfLife)
-    const weight = WEIGHTS[interaction.type] * decay
+    const weight = (WEIGHTS[interaction.type] || 0) * decay
 
     // Category affinity
     if (interaction.category) {

@@ -73,6 +73,11 @@ function flushToStorage(): void {
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
     eventQueue = []
+
+    // Dispatch custom event to notify UI of interaction changes
+    window.dispatchEvent(new CustomEvent('interactionTracked', {
+      detail: { count: merged.length }
+    }))
   } catch (error) {
     console.warn('Failed to write tracking data:', error)
     eventQueue = [] // Clear queue to prevent memory leak
