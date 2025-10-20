@@ -69,17 +69,53 @@ export class LiveEventScraper {
             // Skip if not relevant to query
             if (!this.isRelevantToQuery(title, query)) return
             
-            // Extract description
-            const description = $elem.find('.event-description, .summary, p').first().text().trim()
-            
+            // Extract description first (may contain date information)
+            let rawDescription = $elem.find('.event-description, .summary, p').first().text().trim()
+
+            // Extract date and time with improved parsing
+            // EventBrite often puts date in description field
+            let dateText = ''
+
+            // Try specific selectors first
+            const dateElement = $elem.find('[data-testid="event-date"], .date-info, .event-date, time').first()
+            if (dateElement.length) {
+              dateText = dateElement.text().trim() || dateElement.attr('datetime') || ''
+            }
+
+            // If not found, look in description for date patterns
+            if (!dateText && rawDescription) {
+              // Check if description contains date-like patterns
+              const datePattern = /(?:(?:mon|tue|wed|thu|fri|sat|sun|today|tomorrow)[a-z]*(?:day)?),?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2},?\s+\d{1,2}:\d{2}\s*(?:am|pm)/i
+              const match = rawDescription.match(datePattern)
+              if (match) {
+                dateText = match[0]
+                // Remove the date from description since we extracted it
+                rawDescription = rawDescription.replace(match[0], '').trim()
+              }
+            }
+
+            // If still not found, look for any span containing date-like text
+            if (!dateText) {
+              $elem.find('span').each((_, span) => {
+                const text = $(span).text().trim()
+                // Match patterns like "Sat, Oct 25, 10:00 PM" or "Saturday at 8:00 PM" or "Tomorrow at 5:30 PM"
+                if (text.match(/(?:mon|tue|wed|thu|fri|sat|sun|tomorrow|today)/i) &&
+                    text.match(/\d{1,2}:\d{2}\s*(?:am|pm)/i)) {
+                  dateText = text
+                  return false // Break the loop
+                }
+              })
+            }
+
+            const { date, time } = this.parseDateTime(dateText, title)
+            console.log(`📅 "${title.substring(0, 40)}": dateText="${dateText}" -> ${date} ${time}`)
+
+            // Use cleaned description
+            const description = rawDescription || `${title} - Event in Toronto`
+
             // Extract venue with better parsing
             const venueText = $elem.find('[data-testid="event-location"], .location-info, .venue-name').first().text().trim()
             const venue = this.extractVenueName(venueText)
-            
-            // Extract date and time with improved parsing
-            const dateElement = $elem.find('[data-testid="event-date"], .date-info, .event-date, time').first()
-            const dateText = dateElement.text().trim() || dateElement.attr('datetime') || ''
-            const { date, time } = this.parseDateTime(dateText, title)
             
             // Extract price with comprehensive search
             let priceText = ''
@@ -122,23 +158,30 @@ export class LiveEventScraper {
             
             // Get venue coordinates
             const venueInfo = this.getVenueInfo(venue)
-            
-            events.push({
-              title: title.substring(0, 255),
-              description: description || `${title} - Event in Toronto`,
-              date,
-              time,
-              venue_name: venue,
-              address: venueInfo.address,
-              price_min: price,
-              price_max: priceMax,
-              price_range: priceRange,
-              external_url: link?.startsWith('http') ? link : `https://www.eventbrite.ca${link}`,
-              category: this.categorizeEvent(title + ' ' + description),
-              image_url: imageUrl?.startsWith('http') ? imageUrl : '',
-              latitude: venueInfo.lat,
-              longitude: venueInfo.lng
-            })
+
+            // Only add future events (skip past events)
+            const eventDate = new Date(date)
+            const now = new Date()
+            now.setHours(0, 0, 0, 0) // Start of today
+
+            if (eventDate >= now || isNaN(eventDate.getTime())) {
+              events.push({
+                title: title.substring(0, 255),
+                description: description || `${title} - Event in Toronto`,
+                date,
+                time,
+                venue_name: venue,
+                address: venueInfo.address,
+                price_min: price,
+                price_max: priceMax,
+                price_range: priceRange,
+                external_url: link?.startsWith('http') ? link : `https://www.eventbrite.ca${link}`,
+                category: this.categorizeEvent(title + ' ' + description),
+                image_url: imageUrl?.startsWith('http') ? imageUrl : '',
+                latitude: venueInfo.lat,
+                longitude: venueInfo.lng
+              })
+            }
           })
         } catch (pageError) {
           if (pageError.response) {
@@ -201,23 +244,30 @@ export class LiveEventScraper {
               const linkElement = $elem.find('a').first()
               const link = linkElement.attr('href') || ''
               const venueInfo = this.getVenueInfo(venue)
-              
-              events.push({
-                title: title.substring(0, 255),
-                description: description || `${title} - Event in Toronto`,
-                date,
-                time,
-                venue_name: venue,
-                address: venueInfo.address,
-                price_min: price,
-                price_max: priceMax,
-                price_range: priceRange,
-                external_url: link?.startsWith('http') ? link : `https://www.eventbrite.ca${link}`,
-                category: this.categorizeEvent(title + ' ' + description),
-                image_url: imageUrl?.startsWith('http') ? imageUrl : '',
-                latitude: venueInfo.lat,
-                longitude: venueInfo.lng
-              })
+
+              // Only add future events (skip past events)
+              const eventDate = new Date(date)
+              const now = new Date()
+              now.setHours(0, 0, 0, 0) // Start of today
+
+              if (eventDate >= now || isNaN(eventDate.getTime())) {
+                events.push({
+                  title: title.substring(0, 255),
+                  description: description || `${title} - Event in Toronto`,
+                  date,
+                  time,
+                  venue_name: venue,
+                  address: venueInfo.address,
+                  price_min: price,
+                  price_max: priceMax,
+                  price_range: priceRange,
+                  external_url: link?.startsWith('http') ? link : `https://www.eventbrite.ca${link}`,
+                  category: this.categorizeEvent(title + ' ' + description),
+                  image_url: imageUrl?.startsWith('http') ? imageUrl : '',
+                  latitude: venueInfo.lat,
+                  longitude: venueInfo.lng
+                })
+              }
             }
           })
         }
@@ -268,10 +318,72 @@ export class LiveEventScraper {
 
     // Handle various date formats
     const cleanText = dateText.toLowerCase().replace(/[^\w\s:,-]/g, ' ').trim()
-    
+
+    // Handle relative dates like "Tomorrow at 5:30 PM" or "Today at 8:00 PM"
+    if (cleanText.includes('tomorrow')) {
+      const timeMatch = cleanText.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i)
+      if (timeMatch) {
+        const tomorrow = new Date()
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        const [, hour, minute, ampm] = timeMatch
+        let hour24 = parseInt(hour)
+        if (ampm?.toLowerCase() === 'pm' && hour24 !== 12) hour24 += 12
+        if (ampm?.toLowerCase() === 'am' && hour24 === 12) hour24 = 0
+
+        return {
+          date: tomorrow.toISOString().split('T')[0],
+          time: `${hour24.toString().padStart(2, '0')}:${minute}:00`
+        }
+      }
+    }
+
+    if (cleanText.includes('today')) {
+      const timeMatch = cleanText.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i)
+      if (timeMatch) {
+        const today = new Date()
+        const [, hour, minute, ampm] = timeMatch
+        let hour24 = parseInt(hour)
+        if (ampm?.toLowerCase() === 'pm' && hour24 !== 12) hour24 += 12
+        if (ampm?.toLowerCase() === 'am' && hour24 === 12) hour24 = 0
+
+        return {
+          date: today.toISOString().split('T')[0],
+          time: `${hour24.toString().padStart(2, '0')}:${minute}:00`
+        }
+      }
+    }
+
+    // Handle day of week with time like "Saturday at 8:00 PM"
+    const dayOfWeekMatch = cleanText.match(/(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+at\s+(\d{1,2}):(\d{2})\s*(am|pm)/i)
+    if (dayOfWeekMatch) {
+      const [, dayName, hour, minute, ampm] = dayOfWeekMatch
+      const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+      const targetDay = daysOfWeek.indexOf(dayName.toLowerCase())
+
+      if (targetDay !== -1) {
+        const today = new Date()
+        const currentDay = today.getDay()
+        let daysUntilTarget = targetDay - currentDay
+        if (daysUntilTarget <= 0) daysUntilTarget += 7 // Next week
+
+        const targetDate = new Date()
+        targetDate.setDate(today.getDate() + daysUntilTarget)
+
+        let hour24 = parseInt(hour)
+        if (ampm?.toLowerCase() === 'pm' && hour24 !== 12) hour24 += 12
+        if (ampm?.toLowerCase() === 'am' && hour24 === 12) hour24 = 0
+
+        return {
+          date: targetDate.toISOString().split('T')[0],
+          time: `${hour24.toString().padStart(2, '0')}:${minute}:00`
+        }
+      }
+    }
+
     // Look for specific patterns
     const patterns = [
       /(\w{3})\s+(\d{1,2}),?\s+(\d{4})\s+(?:at\s+)?(\d{1,2}):(\d{2})\s*(am|pm)?/i,
+      /(\w{3}),?\s+(\w{3})\s+(\d{1,2}),?\s+(\d{1,2}):(\d{2})\s*(am|pm)/i, // "Sat, Oct 25, 10:00 PM"
       /(\w+)\s+(\d{1,2})\s+(?:at\s+)?(\d{1,2}):(\d{2})\s*(am|pm)?/i,
       /(\d{1,2})\s+(\w{3})\s+(\d{4})/i,
       /(\d{4})-(\d{1,2})-(\d{1,2})/
@@ -283,15 +395,26 @@ export class LiveEventScraper {
         try {
           let date: Date
           let time = '19:00:00'
-          
-          if (pattern.source.includes('am|pm')) {
+
+          // Handle "Sat, Oct 25, 10:00 PM" format (match has 7 elements)
+          if (match.length === 7) {
+            const [, , month, day, hour, minute, ampm] = match
+            let hour24 = parseInt(hour)
+            if (ampm?.toLowerCase() === 'pm' && hour24 !== 12) hour24 += 12
+            if (ampm?.toLowerCase() === 'am' && hour24 === 12) hour24 = 0
+
+            time = `${hour24.toString().padStart(2, '0')}:${minute}:00`
+            date = new Date(`${month} ${day}, ${new Date().getFullYear()}`)
+          }
+          // Handle other formats with am/pm
+          else if (pattern.source.includes('am|pm')) {
             const [, month, day, year, hour, minute, ampm] = match
             let hour24 = parseInt(hour)
             if (ampm?.toLowerCase() === 'pm' && hour24 !== 12) hour24 += 12
             if (ampm?.toLowerCase() === 'am' && hour24 === 12) hour24 = 0
-            
+
             time = `${hour24.toString().padStart(2, '0')}:${minute}:00`
-            
+
             if (year) {
               date = new Date(`${month} ${day}, ${year}`)
             } else {
@@ -300,7 +423,7 @@ export class LiveEventScraper {
           } else {
             date = new Date(match[0])
           }
-          
+
           if (!isNaN(date.getTime())) {
             return {
               date: date.toISOString().split('T')[0],

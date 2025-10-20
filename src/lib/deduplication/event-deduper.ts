@@ -83,7 +83,7 @@ export function areEventsSimilar(
 ): boolean {
   const {
     timeWindowMinutes = 90,
-    titleSimilarityThreshold = 0.85,
+    titleSimilarityThreshold = 0.95, // Increased to 0.95 to reduce false positives
     venueMatchRequired = false
   } = options
   
@@ -189,9 +189,10 @@ export function dedupeEvents(events: any[], options: DedupeOptions = {}): any[] 
   }
   
   console.log(`🔍 Deduplicating ${events.length} events...`)
-  
+
   const dedupedEvents: any[] = []
   const processedSlugs = new Set<string>()
+  let duplicatesRemoved = 0
   
   for (const event of events) {
     if (!event.title) {
@@ -222,11 +223,13 @@ export function dedupeEvents(events: any[], options: DedupeOptions = {}): any[] 
     if (isDuplicate && duplicateIndex >= 0) {
       // Replace with better event
       const betterEvent = selectBetterEvent(
-        event, 
-        dedupedEvents[duplicateIndex], 
+        event,
+        dedupedEvents[duplicateIndex],
         options.preserveProvider
       )
       dedupedEvents[duplicateIndex] = betterEvent
+      duplicatesRemoved++
+      console.log(`🔍 Duplicate found: "${event.title}" ≈ "${dedupedEvents[duplicateIndex].title}"`)
     } else {
       // Add new unique event
       dedupedEvents.push(event)

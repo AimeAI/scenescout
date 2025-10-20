@@ -12,7 +12,16 @@ export function formatDateTime(date?: string | Date, time?: string): string {
   if (!date) return 'Date TBA'
 
   try {
-    const d = typeof date === 'string' ? new Date(date) : date
+    let d: Date
+
+    // Parse date properly to avoid timezone issues
+    if (typeof date === 'string' && date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      // Date-only format (YYYY-MM-DD): parse as local date
+      const [year, month, day] = date.split('-').map(Number)
+      d = new Date(year, month - 1, day)
+    } else {
+      d = typeof date === 'string' ? new Date(date) : date
+    }
 
     // Format date part
     const dateStr = d.toLocaleDateString('en-US', {
@@ -61,13 +70,27 @@ export function formatDateRange(
   if (!startDate) return 'Date TBA'
 
   try {
-    const start = typeof startDate === 'string' ? new Date(startDate) : startDate
+    let start: Date
+    // Parse start date properly to avoid timezone issues
+    if (typeof startDate === 'string' && startDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month, day] = startDate.split('-').map(Number)
+      start = new Date(year, month - 1, day)
+    } else {
+      start = typeof startDate === 'string' ? new Date(startDate) : startDate
+    }
 
     if (!endDate) {
       return formatDateTime(start, startTime)
     }
 
-    const end = typeof endDate === 'string' ? new Date(endDate) : endDate
+    let end: Date
+    // Parse end date properly to avoid timezone issues
+    if (typeof endDate === 'string' && endDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month, day] = endDate.split('-').map(Number)
+      end = new Date(year, month - 1, day)
+    } else {
+      end = typeof endDate === 'string' ? new Date(endDate) : endDate
+    }
 
     // Same day event
     if (start.toDateString() === end.toDateString()) {
@@ -117,7 +140,15 @@ export function getRelativeTime(date?: string | Date): string {
   if (!date) return ''
 
   try {
-    const d = typeof date === 'string' ? new Date(date) : date
+    let d: Date
+    // Parse date properly to avoid timezone issues
+    if (typeof date === 'string' && date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month, day] = date.split('-').map(Number)
+      d = new Date(year, month - 1, day)
+    } else {
+      d = typeof date === 'string' ? new Date(date) : date
+    }
+
     const now = new Date()
     const diffMs = d.getTime() - now.getTime()
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
@@ -141,7 +172,15 @@ export function isHappeningSoon(date?: string | Date): boolean {
   if (!date) return false
 
   try {
-    const d = typeof date === 'string' ? new Date(date) : date
+    let d: Date
+    // Parse date properly to avoid timezone issues
+    if (typeof date === 'string' && date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month, day] = date.split('-').map(Number)
+      d = new Date(year, month - 1, day)
+    } else {
+      d = typeof date === 'string' ? new Date(date) : date
+    }
+
     const now = new Date()
     const diffMs = d.getTime() - now.getTime()
     const diffDays = diffMs / (1000 * 60 * 60 * 24)

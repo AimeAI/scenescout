@@ -69,10 +69,13 @@ export default function HomePage() {
   const [isMounted, setIsMounted] = useState(false)
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [modalEvent, setModalEvent] = useState<any>(null)
+  const [visibleCategoryCount, setVisibleCategoryCount] = useState(8) // Start with 8 categories
+  const [isLoadingMoreCategories, setIsLoadingMoreCategories] = useState(false)
   const router = useRouter()
 
   // Create refs for scroll containers - one per category
   const scrollRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const categoryLoadTriggerRef = useRef<HTMLDivElement | null>(null)
 
   // Set mounted state to prevent hydration mismatch
   useEffect(() => {
@@ -328,6 +331,13 @@ export default function HomePage() {
   useEffect(() => {
     if (!isMounted || !isTrackingEnabled()) return
 
+    // Initialize with current interaction count
+    const interactions = readInteractions()
+    if (interactions.length > 0 && interactionTrigger === 0) {
+      setInteractionTrigger(interactions.length)
+      console.log('🎯 Initializing with existing interactions:', interactions.length)
+    }
+
     // Listen for custom interaction events (more responsive than polling)
     const handleInteractionChange = () => {
       const interactions = readInteractions()
@@ -420,6 +430,37 @@ export default function HomePage() {
     // The mergeCategoriesWithDynamic function handles the sorting
     return merged
   }, [categoryEvents, interactionTrigger, isMounted])
+
+  // Vertical infinite scroll: Load more categories when user scrolls to bottom
+  useEffect(() => {
+    const trigger = categoryLoadTriggerRef.current
+    if (!trigger || !displayCategories || displayCategories.length === 0) return
+
+    const handleLoadMoreCategories = () => {
+      if (isLoadingMoreCategories || visibleCategoryCount >= displayCategories.length) return
+
+      setIsLoadingMoreCategories(true)
+      setTimeout(() => {
+        setVisibleCategoryCount(prev => Math.min(prev + 6, displayCategories.length))
+        setIsLoadingMoreCategories(false)
+      }, 500)
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !isLoadingMoreCategories && visibleCategoryCount < displayCategories.length) {
+          handleLoadMoreCategories()
+        }
+      },
+      { threshold: 0.1, rootMargin: '400px' }
+    )
+
+    observer.observe(trigger)
+
+    return () => {
+      if (trigger) observer.unobserve(trigger)
+    }
+  }, [visibleCategoryCount, isLoadingMoreCategories, displayCategories])
 
   return (
     <AppLayout>
@@ -585,7 +626,7 @@ export default function HomePage() {
             </div>
           ) : (
             <AnimatePresence mode="popLayout">
-              {displayCategories.map((category, index) => {
+              {displayCategories.slice(0, visibleCategoryCount).map((category, index) => {
                 // Use cached events when feature is enabled
                 if (process.env.NEXT_PUBLIC_FEATURE_CACHED_EVENTS === 'true') {
                   // Check if this category has personalization data
@@ -654,9 +695,22 @@ export default function HomePage() {
                     whileHover={affinityScore > 0 ? { scale: 1.01 } : {}}
                     className="mb-8 relative">
                     <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-2xl font-bold flex items-center gap-2">
-                        <span>{category.emoji}</span>
-                        {category.title}
+                      <h2
+                        className="text-2xl font-bold flex items-center gap-2 cursor-pointer hover:text-orange-500 transition-colors group"
+                        onClick={() => router.push(`/category/${category.id}`)}
+                      >
+                        <span className="group-hover:scale-110 transition-transform">{category.emoji}</span>
+                        <span className="border-b-2 border-transparent group-hover:border-orange-500 transition-all">
+                          {category.title}
+                        </span>
+                        <svg
+                          className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
                         {isPersonalized && (
                           <span className="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-medium">
                             ✨ Picked For You
@@ -752,7 +806,17 @@ export default function HomePage() {
                             <div className="absolute top-2 right-2">
                               <span className="bg-black/70 text-white px-2 py-1 rounded text-xs font-medium">
                                 {event.date
-                                  ? new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                                  ? (() => {
+                                      // Parse date properly to avoid timezone issues
+                                      let date: Date
+                                      if (typeof event.date === 'string' && event.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                                        const [year, month, day] = event.date.split('-').map(Number)
+                                        date = new Date(year, month - 1, day)
+                                      } else {
+                                        date = new Date(event.date)
+                                      }
+                                      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                                    })()
                                   : 'TBA'}
                               </span>
                             </div>
@@ -813,13 +877,27 @@ export default function HomePage() {
             }).filter(Boolean)}
             </AnimatePresence>
           )}
-          
+
+          {/* Vertical infinite scroll trigger */}
+          {!loading && visibleCategoryCount < displayCategories.length && (
+            <div ref={categoryLoadTriggerRef} className="py-12 flex justify-center">
+              {isLoadingMoreCategories ? (
+                <div className="flex flex-col items-center gap-3">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" />
+                  <p className="text-gray-400">Loading more categories...</p>
+                </div>
+              ) : (
+                <div className="text-gray-500 text-sm">↓ Scroll for more categories ↓</div>
+              )}
+            </div>
+          )}
+
           {/* All categories loaded message */}
-          {!loading && (
+          {!loading && visibleCategoryCount >= displayCategories.length && (
             <div className="text-center py-8">
               <div className="text-2xl mb-2">✨</div>
               <p className="text-gray-400 text-sm">
-                Showing {CATEGORIES.length} curated categories from Ticketmaster & EventBrite
+                Showing {displayCategories.length} curated categories from Ticketmaster & EventBrite
               </p>
               <p className="text-gray-500 text-xs mt-2">
                 Visit /feed for more trending events and discovery options

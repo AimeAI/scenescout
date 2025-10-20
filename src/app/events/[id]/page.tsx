@@ -47,26 +47,28 @@ export default function EventDetailPage() {
       setLoading(true)
 
       // First, check if we have the event in sessionStorage (from homepage navigation)
-      const cachedEvent = sessionStorage.getItem(`event_${eventId}`)
-      if (cachedEvent) {
-        console.log('✅ Using cached event data from sessionStorage')
-        const eventData = JSON.parse(cachedEvent)
+      if (typeof window !== 'undefined') {
+        const cachedEvent = sessionStorage.getItem(`event_${eventId}`)
+        if (cachedEvent) {
+          console.log('✅ Using cached event data from sessionStorage')
+          const eventData = JSON.parse(cachedEvent)
 
-        // Normalize flat event structure to include nested venue object for compatibility
-        const normalizedEvent = {
-          ...eventData,
-          event_date: eventData.date || eventData.event_date,
-          venue: {
-            name: eventData.venue_name,
-            address: eventData.address || eventData.venue_address,
-            latitude: eventData.latitude,
-            longitude: eventData.longitude
+          // Normalize flat event structure to include nested venue object for compatibility
+          const normalizedEvent = {
+            ...eventData,
+            event_date: eventData.date || eventData.event_date,
+            venue: {
+              name: eventData.venue_name,
+              address: eventData.address || eventData.venue_address,
+              latitude: eventData.latitude,
+              longitude: eventData.longitude
+            }
           }
-        }
 
-        setEvent(normalizedEvent)
-        setLoading(false)
-        return
+          setEvent(normalizedEvent)
+          setLoading(false)
+          return
+        }
       }
 
       // If not in cache, fetch from our API endpoint
@@ -216,7 +218,16 @@ export default function EventDetailPage() {
   const formatDateTime = (date?: string, time?: string): string => {
     if (!date) return 'Date TBA'
     try {
-      const d = new Date(date)
+      let d: Date
+      // Parse date properly to avoid timezone issues
+      if (typeof date === 'string' && date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        // Date-only format (YYYY-MM-DD): parse as local date
+        const [year, month, day] = date.split('-').map(Number)
+        d = new Date(year, month - 1, day)
+      } else {
+        d = new Date(date)
+      }
+
       const dateStr = d.toLocaleDateString('en-US', {
         weekday: 'short',
         month: 'short',
@@ -282,7 +293,16 @@ export default function EventDetailPage() {
   }
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
+    let date: Date
+    // Parse date properly to avoid timezone issues
+    if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      // Date-only format (YYYY-MM-DD): parse as local date
+      const [year, month, day] = dateString.split('-').map(Number)
+      date = new Date(year, month - 1, day)
+    } else {
+      date = new Date(dateString)
+    }
+
     return date.toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',

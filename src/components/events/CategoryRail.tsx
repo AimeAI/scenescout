@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { useCachedEvents } from '@/lib/events/useCachedEvents'
 import { markEventsAsSeen } from '@/lib/tracking/seen-store'
 import { PriceBadge } from './PriceBadge'
@@ -23,18 +24,55 @@ export function CategoryRail({
   searchQuery = '',
   activeChip = null
 }: CategoryRailProps) {
+  const router = useRouter()
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const markedRef = useRef(false)
+  const loadMoreTriggerRef = useRef<HTMLDivElement | null>(null)
+  const [displayLimit, setDisplayLimit] = useState(20) // Start with 20 events
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
 
   // Use cached events hook
   const { events: cachedEvents, loading: cachedLoading } = useCachedEvents({
     category: category.query,
     lat: userLocation?.lat,
     lng: userLocation?.lng,
-    limit: 60,
+    limit: 200, // Fetch more events for infinite scroll
     cityName: 'Toronto', // TODO: Make dynamic based on location
     applySeen: true
   })
+
+  // Infinite scroll: Load more when user scrolls near end
+  const handleLoadMore = useCallback(() => {
+    if (isLoadingMore || displayLimit >= cachedEvents.length) return
+
+    setIsLoadingMore(true)
+    // Simulate loading delay for smooth UX
+    setTimeout(() => {
+      setDisplayLimit(prev => Math.min(prev + 20, cachedEvents.length))
+      setIsLoadingMore(false)
+    }, 300)
+  }, [isLoadingMore, displayLimit, cachedEvents.length])
+
+  // Set up IntersectionObserver for horizontal infinite scroll
+  useEffect(() => {
+    const trigger = loadMoreTriggerRef.current
+    if (!trigger) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !isLoadingMore && displayLimit < cachedEvents.length) {
+          handleLoadMore()
+        }
+      },
+      { threshold: 0.5, rootMargin: '200px' }
+    )
+
+    observer.observe(trigger)
+
+    return () => {
+      if (trigger) observer.unobserve(trigger)
+    }
+  }, [handleLoadMore, isLoadingMore, displayLimit, cachedEvents.length])
 
   // Mark events as seen when they become visible
   useEffect(() => {
@@ -48,8 +86,8 @@ export function CategoryRail({
     }
   }, [cachedEvents])
 
-  // Filter events by search query and chip
-  const filteredEvents = cachedEvents.filter(event => {
+  // Filter events by search query and chip, then apply display limit
+  const allFilteredEvents = cachedEvents.filter(event => {
     // Search filter
     if (searchQuery && searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
@@ -68,7 +106,14 @@ export function CategoryRail({
           const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
           const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
           if (!event.date) return false
-          const eventDate = new Date(event.date)
+          // Parse date properly to avoid timezone issues
+          let eventDate: Date
+          if (typeof event.date === 'string' && event.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            const [year, month, day] = event.date.split('-').map(Number)
+            eventDate = new Date(year, month - 1, day)
+          } else {
+            eventDate = new Date(event.date)
+          }
           return eventDate >= todayStart && eventDate < todayEnd
         }
         case 'now': {
@@ -88,6 +133,10 @@ export function CategoryRail({
 
     return true
   })
+
+  // Apply display limit for infinite scroll
+  const filteredEvents = allFilteredEvents.slice(0, displayLimit)
+  const hasMore = allFilteredEvents.length > displayLimit
 
   const handleSaveEvent = (event: any) => {
     const wasSaved = isSaved(event.id)
@@ -123,12 +172,29 @@ export function CategoryRail({
     return null // Don't show empty categories
   }
 
+  const handleCategoryClick = () => {
+    router.push(`/category/${category.id}`)
+  }
+
   return (
     <div className="mb-8 relative">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold flex items-center gap-2">
-          <span>{category.emoji}</span>
-          {category.title}
+        <h2
+          className="text-2xl font-bold flex items-center gap-2 cursor-pointer hover:text-orange-500 transition-colors group"
+          onClick={handleCategoryClick}
+        >
+          <span className="group-hover:scale-110 transition-transform">{category.emoji}</span>
+          <span className="border-b-2 border-transparent group-hover:border-orange-500 transition-all">
+            {category.title}
+          </span>
+          <svg
+            className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
         </h2>
         <span className="text-gray-400 text-sm">{filteredEvents.length} events</span>
       </div>
@@ -209,11 +275,21 @@ export function CategoryRail({
                 <div className="absolute top-2 right-2">
                   <span className="bg-black/70 text-white px-2 py-1 rounded text-xs font-medium">
                     {event.date
-                      ? new Date(event.date).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric'
-                        })
+                      ? (() => {
+                          // Parse date properly to avoid timezone issues
+                          let date: Date
+                          if (typeof event.date === 'string' && event.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                            const [year, month, day] = event.date.split('-').map(Number)
+                            date = new Date(year, month - 1, day)
+                          } else {
+                            date = new Date(event.date)
+                          }
+                          return date.toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })
+                        })()
                       : 'TBA'}
                   </span>
                 </div>
@@ -263,6 +339,25 @@ export function CategoryRail({
             </div>
           </div>
         ))}
+
+        {/* Infinite scroll trigger element */}
+        {hasMore && (
+          <div
+            ref={loadMoreTriggerRef}
+            className="flex-shrink-0 w-72 flex items-center justify-center"
+          >
+            <div className="bg-gray-800 rounded-lg p-8 w-full h-40 flex items-center justify-center">
+              {isLoadingMore ? (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+                  <span className="text-gray-400 text-sm">Loading more...</span>
+                </div>
+              ) : (
+                <span className="text-gray-400 text-sm">Scroll for more →</span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -13,8 +13,9 @@ export async function GET(request: NextRequest) {
     const city = searchParams.get('city')
     const lat = searchParams.get('lat')
     const lng = searchParams.get('lng')
-    
-    console.log(`🔍 Searching for: "${query}"`)
+    const sortBy = searchParams.get('sort') || 'date' // 'date' or 'relevance'
+
+    console.log(`🔍 Searching for: "${query}" (sort: ${sortBy})`)
     
     // Get events from both Ticketmaster and EventBrite APIs
     const allEvents: any[] = []
@@ -27,7 +28,9 @@ export async function GET(request: NextRequest) {
     
     // Try Ticketmaster first (primary source)
     try {
-      const tmResponse = await fetch(`${request.nextUrl.origin}/api/ticketmaster/search?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 15)}&${locationParams}`)
+      // Increase limit to 100 for Ticketmaster to get more events
+      // Pass sort parameter to Ticketmaster API
+      const tmResponse = await fetch(`${request.nextUrl.origin}/api/ticketmaster/search?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 100)}&${locationParams}&sort=${sortBy}`)
       if (tmResponse.ok) {
         const tmData = await tmResponse.json()
         if (tmData.success && tmData.events?.length > 0) {
@@ -40,10 +43,11 @@ export async function GET(request: NextRequest) {
     } catch (error) {
       console.warn('⚠️ Ticketmaster API error:', error)
     }
-    
+
     // Try EventBrite (secondary source) using live scraper
     try {
-      const ebResponse = await fetch(`${request.nextUrl.origin}/api/search-live?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 10)}`)
+      // Increase limit to 100 for EventBrite to get more events
+      const ebResponse = await fetch(`${request.nextUrl.origin}/api/search-live?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 100)}`)
       if (ebResponse.ok) {
         const ebData = await ebResponse.json()
         if (ebData.success && ebData.events?.length > 0) {
@@ -51,6 +55,9 @@ export async function GET(request: NextRequest) {
           const convertedEvents = ebData.events.map((event: any) => ({
             ...event,
             id: `live_${event.title.replace(/[^\w]/g, '_').toLowerCase()}`,
+            // Map date fields correctly for Event type
+            event_date: event.date, // Scraper returns 'date', Event type expects 'event_date'
+            start_time: event.time, // Scraper returns 'time', Event type expects 'start_time'
             source: 'eventbrite',
             provider: 'EventBrite',
             official: true,
@@ -66,12 +73,27 @@ export async function GET(request: NextRequest) {
       console.warn('⚠️ EventBrite live scraper error:', error)
     }
     
+    // Filter out past events - only show events from today onwards (comparing dates only, not times)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0) // Start of today
+
+    const futureEvents = allEvents.filter(event => {
+      const eventDateStr = event.event_date || event.date
+      if (!eventDateStr) return true // Keep events without dates
+
+      const eventDate = new Date(eventDateStr)
+      if (isNaN(eventDate.getTime())) return true // Keep invalid dates
+
+      eventDate.setHours(0, 0, 0, 0) // Compare dates only, not times
+      return eventDate >= today // Keep today and future events
+    })
+
     // Sort events by date and prioritize Ticketmaster
-    const sortedEvents = allEvents
+    const sortedEvents = futureEvents
       .sort((a, b) => {
         // First sort by date
-        const dateA = new Date(a.date || '9999-12-31')
-        const dateB = new Date(b.date || '9999-12-31')
+        const dateA = new Date(a.event_date || a.date || '9999-12-31')
+        const dateB = new Date(b.event_date || b.date || '9999-12-31')
         if (dateA.getTime() !== dateB.getTime()) {
           return dateA.getTime() - dateB.getTime()
         }

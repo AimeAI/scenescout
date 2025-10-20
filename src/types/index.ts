@@ -12,8 +12,12 @@ export interface Event {
   date?: string
   event_date?: string
   start_time?: string
+  time?: string // For compatibility with scraped events
   end_time?: string | null
   timezone?: string | null
+  latitude?: number | null // For compatibility with Ticketmaster events
+  longitude?: number | null // For compatibility with Ticketmaster events
+  address?: string | null // Direct address field
   price?: number
   price_min?: number | null
   price_max?: number | null

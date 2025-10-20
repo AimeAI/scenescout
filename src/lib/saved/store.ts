@@ -110,7 +110,8 @@ async function saveToDatabase(event: any): Promise<void> {
     console.log(`✅ Created ${reminderData.created} reminder(s) for event ${event.id}`);
 
   } catch (error) {
-    console.error('❌ Database save error:', error);
+    // Don't block UI on database errors - user's save still works locally
+    console.warn('⚠️ Database save failed (non-blocking):', error instanceof Error ? error.message : String(error));
   }
 }
 

@@ -123,10 +123,28 @@ export function NetflixEventCard({
   const formatDate = () => {
     const rawValue = event.event_date || event.start_time || event.date || event.created_at
     if (!rawValue) return 'TBD'
+
+    // Parse date string properly to avoid timezone issues
+    // If it's a date-only string (YYYY-MM-DD), parse it as local date
+    const dateStr = String(rawValue)
+    if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      // Date-only format: parse as local date to avoid timezone shift
+      const [year, month, day] = dateStr.split('-').map(Number)
+      const date = new Date(year, month - 1, day)
+      const formatted = date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+      })
+      console.log(`📅 Date parsing: "${dateStr}" -> ${year}-${month}-${day} -> ${formatted}`)
+      return formatted
+    }
+
+    // Otherwise use standard Date parsing
     const date = new Date(rawValue)
     if (Number.isNaN(date.getTime())) return 'TBD'
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
       day: 'numeric',
       year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
     })

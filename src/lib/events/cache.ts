@@ -1,6 +1,6 @@
 type CacheKey = string;
 
-const CACHE_NS = 'scenes_scout_cache_v1';
+const CACHE_NS = 'scenes_scout_cache_v2';
 
 export interface CacheEntry {
   key: CacheKey;

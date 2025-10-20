@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSceneScoutCategory } from '@/lib/api/category-mappings'
 
-// Force dynamic rendering
-export const dynamic = 'force-dynamic'
+// Cache for 5 minutes to reduce API calls
+export const revalidate = 300
 
 const TICKETMASTER_API_BASE = 'https://app.ticketmaster.com/discovery/v2'
 const API_KEY = process.env.TICKETMASTER_API_KEY || process.env.TICKETMASTER_CONSUMER_KEY
+
+// In-memory cache to prevent duplicate requests within same deployment
+const requestCache = new Map<string, { data: any; timestamp: number }>()
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 interface TicketmasterEvent {
   id: string
@@ -86,8 +90,11 @@ function convertTicketmasterEvent(tmEvent: TicketmasterEvent): any {
     description: tmEvent.info || tmEvent.pleaseNote || tmEvent.description || `${tmEvent.name} at ${venue?.name || 'TBA'}`,
     category: sceneScoutCategory,
     subcategory: classification?.genre?.name || classification?.subGenre?.name,
+    // Map to Event type expected fields
     date: tmEvent.dates.start.localDate,
+    event_date: tmEvent.dates.start.localDate, // Event type expects event_date
     time: tmEvent.dates.start.localTime,
+    start_time: tmEvent.dates.start.localTime, // Event type expects start_time
     venue_name: venue?.name || 'TBA',
     city_name: venue?.city?.name,
     latitude: venue?.location?.latitude ? parseFloat(venue.location.latitude) : null,
@@ -119,6 +126,7 @@ export async function GET(request: NextRequest) {
     const classificationName = searchParams.get('classificationName')
     const startDate = searchParams.get('startDate') // YYYY-MM-DD
     const endDate = searchParams.get('endDate') // YYYY-MM-DD
+    const sortBy = searchParams.get('sort') || 'date' // 'date' or 'relevance'
 
     if (!API_KEY) {
       return NextResponse.json(
@@ -127,12 +135,27 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Create cache key from request parameters (including sort)
+    const cacheKey = `${query}|${limit}|${city}|${lat}|${lng}|${classificationName}|${startDate}|${endDate}|${sortBy}`
+
+    // Check cache first
+    const cached = requestCache.get(cacheKey)
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      console.log(`✅ Ticketmaster cache hit for: "${query}"`)
+      return NextResponse.json(cached.data)
+    }
+
+    // Determine Ticketmaster sort parameter
+    // relevance: sorts by relevance (best match)
+    // date,asc: sorts by date ascending (soonest first)
+    const ticketmasterSort = sortBy === 'relevance' ? 'relevance,desc' : 'date,asc'
+
     // Build Ticketmaster API URL
     const params = new URLSearchParams({
       apikey: API_KEY,
       keyword: query,
       size: Math.min(limit, 199).toString(), // Ticketmaster max is 199
-      sort: 'date,asc',
+      sort: ticketmasterSort,
       countryCode: 'US,CA'
     })
 
@@ -140,6 +163,8 @@ export async function GET(request: NextRequest) {
     if (startDate) {
       params.append('startDateTime', `${startDate}T00:00:00Z`)
     }
+    // Note: Don't add startDateTime by default - let Ticketmaster return all future events
+    // We'll filter on the backend instead to avoid 400 errors from invalid formats
     if (endDate) {
       params.append('endDateTime', `${endDate}T23:59:59Z`)
     }
@@ -191,10 +216,10 @@ export async function GET(request: NextRequest) {
     const data: TicketmasterResponse = await response.json()
     
     const events = data._embedded?.events?.map(convertTicketmasterEvent) || []
-    
+
     console.log(`✅ Ticketmaster: Found ${events.length} events for query: "${query}"`)
 
-    return NextResponse.json({
+    const result = {
       success: true,
       events,
       pagination: {
@@ -203,7 +228,20 @@ export async function GET(request: NextRequest) {
         limit: data.page?.size || limit
       },
       source: 'ticketmaster'
-    })
+    }
+
+    // Cache the result
+    requestCache.set(cacheKey, { data: result, timestamp: Date.now() })
+
+    // Clean old cache entries (keep last 100)
+    if (requestCache.size > 100) {
+      const entries = Array.from(requestCache.entries())
+      entries.sort((a, b) => b[1].timestamp - a[1].timestamp)
+      requestCache.clear()
+      entries.slice(0, 100).forEach(([key, value]) => requestCache.set(key, value))
+    }
+
+    return NextResponse.json(result)
 
   } catch (error) {
     console.error('Ticketmaster API error:', error)
