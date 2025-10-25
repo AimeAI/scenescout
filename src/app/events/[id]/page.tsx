@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Button } from '@/components/ui/button'
 import { Calendar, Clock, MapPin, Users, DollarSign, ExternalLink, ArrowLeft, Share, Heart } from 'lucide-react'
@@ -347,17 +348,74 @@ export default function EventDetailPage() {
     )
   }
 
+  // Generate JSON-LD structured data for SEO
+  const structuredData = event ? {
+    '@context': 'https://schema.org',
+    '@type': 'Event',
+    name: event.title,
+    description: event.description || `${event.title} at ${event.venue_name || 'TBA'}`,
+    startDate: event.event_date || event.start_time || event.date,
+    endDate: event.end_time,
+    eventStatus: 'https://schema.org/EventScheduled',
+    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+    location: {
+      '@type': 'Place',
+      name: event.venue_name || 'TBA',
+      address: {
+        '@type': 'PostalAddress',
+        addressLocality: event.city_name || 'Toronto',
+        addressCountry: 'CA',
+      },
+      ...(event.venue?.latitude && event.venue?.longitude && {
+        geo: {
+          '@type': 'GeoCoordinates',
+          latitude: event.venue.latitude,
+          longitude: event.venue.longitude,
+        },
+      }),
+    },
+    image: event.image_url,
+    ...(event.is_free ? {
+      isAccessibleForFree: true,
+    } : {
+      offers: {
+        '@type': 'Offer',
+        url: event.external_url,
+        price: event.price_min || 0,
+        priceCurrency: event.currency || 'CAD',
+        availability: 'https://schema.org/InStock',
+      },
+    }),
+    organizer: {
+      '@type': 'Organization',
+      name: event.source || 'SceneScout',
+    },
+    ...(event.category && {
+      genre: event.category,
+    }),
+  } : null
+
   return (
     <AppLayout>
+      {structuredData && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        />
+      )}
       <div className="min-h-screen bg-black text-white">
         {/* Header */}
         <div className="relative h-96 overflow-hidden">
           {event.image_url && (
             <div className="absolute inset-0">
-              <img
+              <Image
                 src={event.image_url}
                 alt={event.title}
-                className="w-full h-full object-cover"
+                fill
+                className="object-cover"
+                priority
+                quality={90}
+                sizes="100vw"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
             </div>

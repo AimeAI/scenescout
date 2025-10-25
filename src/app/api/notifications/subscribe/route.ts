@@ -1,27 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabaseClient } from '@/lib/supabase-server'
+import { z } from 'zod'
+import { pushSubscriptionSchema } from '@/lib/validation/schemas'
 
-export const runtime = 'edge'
+// Remove edge runtime - incompatible with validation middleware
+// export const runtime = 'edge'
+
+// Validation schema for push subscription
+const subscribeSchema = z.object({
+  subscription: pushSubscriptionSchema,
+  userId: z.string()
+    .max(500, 'User ID too long')
+    .default('anonymous'),
+})
+
+// Validation schema for unsubscribe
+const unsubscribeSchema = z.object({
+  endpoint: z.string()
+    .url('Invalid endpoint')
+    .max(2000, 'Endpoint too long'),
+})
+
+// Rate limit: 10 subscriptions per minute
+const SUBSCRIBE_RATE_LIMIT = {
+  maxRequests: 10,
+  windowMs: 60 * 1000,
+}
 
 /**
  * POST /api/notifications/subscribe
  * Subscribe to push notifications
- *
- * This is an alias for /api/reminders/subscribe for better discoverability
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = getServiceSupabaseClient()
+    // Parse and validate request body directly
     const body = await request.json()
+    const validation = subscribeSchema.safeParse(body)
 
-    const { subscription, userId = 'anonymous' } = body
-
-    if (!subscription || !subscription.endpoint) {
+    if (!validation.success) {
       return NextResponse.json(
-        { success: false, error: 'Invalid subscription data' },
+        {
+          success: false,
+          error: validation.error.issues[0]?.message || 'Invalid request',
+          timestamp: new Date().toISOString(),
+        },
         { status: 400 }
       )
     }
+
+    const { subscription, userId } = validation.data
+    const supabase = getServiceSupabaseClient()
 
     // Extract keys from subscription
     const keys = {
@@ -61,10 +89,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('❌ Subscribe error:', error)
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    )
+    return safeErrorResponse(error, 'Failed to subscribe to notifications')
   }
 }
 
@@ -74,16 +99,21 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = getServiceSupabaseClient()
-    const body = await request.json()
-    const { endpoint } = body
-
-    if (!endpoint) {
+    // Validate request body
+    const validation = await validateRequestBody(request, unsubscribeSchema)
+    if (!validation.success) {
       return NextResponse.json(
-        { success: false, error: 'Endpoint required' },
-        { status: 400 }
+        {
+          success: false,
+          error: validation.error,
+          timestamp: new Date().toISOString(),
+        },
+        { status: validation.status || 400 }
       )
     }
+
+    const { endpoint } = validation.data!
+    const supabase = getServiceSupabaseClient()
 
     const { error } = await supabase
       .from('push_subscriptions')
@@ -104,9 +134,6 @@ export async function DELETE(request: NextRequest) {
 
   } catch (error) {
     console.error('❌ Unsubscribe error:', error)
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    )
+    return safeErrorResponse(error, 'Failed to unsubscribe from notifications')
   }
 }

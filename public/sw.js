@@ -1,18 +1,31 @@
 // Service Worker for Push Notifications and Real-time Updates
 
-const CACHE_NAME = 'scenescout-v1'
+const CACHE_VERSION = 'v2'
+const CACHE_NAME = `scenescout-${CACHE_VERSION}`
+const IMAGE_CACHE = `scenescout-images-${CACHE_VERSION}`
+const API_CACHE = `scenescout-api-${CACHE_VERSION}`
+const PAGES_CACHE = `scenescout-pages-${CACHE_VERSION}`
+
 const STATIC_CACHE = [
   '/',
   '/manifest.json',
   '/icon-192x192.png',
   '/icon-512x512.png',
-  '/badge-72x72.png'
+  '/badge-72x72.png',
+  '/offline'
 ]
+
+// Cache size limits
+const CACHE_LIMITS = {
+  images: 100,
+  api: 50,
+  pages: 30
+}
 
 // Install event
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing service worker')
-  
+  console.log('[SW] Installing service worker v2')
+
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
@@ -28,70 +41,63 @@ self.addEventListener('install', (event) => {
 
 // Activate event
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating service worker')
-  
+  console.log('[SW] Activating service worker v2')
+
   event.waitUntil(
-    caches.keys()
-      .then((cacheNames) => {
+    Promise.all([
+      // Clean up old caches
+      caches.keys().then((cacheNames) => {
         return Promise.all(
           cacheNames
-            .filter((cacheName) => cacheName !== CACHE_NAME)
+            .filter((cacheName) =>
+              cacheName.startsWith('scenescout-') &&
+              !cacheName.includes(CACHE_VERSION)
+            )
             .map((cacheName) => {
               console.log('[SW] Deleting old cache:', cacheName)
               return caches.delete(cacheName)
             })
         )
-      })
-      .then(() => {
-        console.log('[SW] Service worker activated')
-        self.clients.claim()
-      })
+      }),
+      // Claim clients immediately
+      self.clients.claim()
+    ]).then(() => {
+      console.log('[SW] Service worker activated')
+    })
   )
 })
 
-// Fetch event (for offline functionality)
+// Fetch event with smart caching strategies
 self.addEventListener('fetch', (event) => {
+  const { request } = event
+  const url = new URL(request.url)
+
   // Skip non-GET requests
-  if (event.request.method !== 'GET') return
+  if (request.method !== 'GET') return
 
-  // Skip external requests
-  if (!event.request.url.startsWith(self.location.origin)) return
+  // Skip cross-origin requests except images
+  if (url.origin !== self.location.origin && !request.destination === 'image') return
 
-  event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Return cached version if available
-        if (response) {
-          return response
-        }
+  // API requests: Network-first strategy
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(networkFirstStrategy(request, API_CACHE))
+    return
+  }
 
-        // Fetch from network
-        return fetch(event.request)
-          .then((response) => {
-            // Don't cache if not a valid response
-            if (!response || response.status !== 200 || response.type !== 'basic') {
-              return response
-            }
+  // Image requests: Cache-first strategy
+  if (request.destination === 'image' || /\.(jpg|jpeg|png|gif|webp|avif|svg)$/i.test(url.pathname)) {
+    event.respondWith(cacheFirstStrategy(request, IMAGE_CACHE))
+    return
+  }
 
-            // Clone the response
-            const responseToCache = response.clone()
+  // Page navigation: Stale-while-revalidate
+  if (request.mode === 'navigate') {
+    event.respondWith(staleWhileRevalidate(request, PAGES_CACHE))
+    return
+  }
 
-            // Cache the response for future use
-            caches.open(CACHE_NAME)
-              .then((cache) => {
-                cache.put(event.request, responseToCache)
-              })
-
-            return response
-          })
-          .catch(() => {
-            // Return offline page for navigation requests
-            if (event.request.mode === 'navigate') {
-              return caches.match('/offline.html')
-            }
-          })
-      })
-  )
+  // Static assets: Cache-first
+  event.respondWith(cacheFirstStrategy(request, CACHE_NAME))
 })
 
 // Push event (for push notifications)
@@ -230,19 +236,97 @@ self.addEventListener('message', (event) => {
   }
 })
 
+// Caching Strategies
+
+// Network-first: Try network, fall back to cache (good for API calls)
+async function networkFirstStrategy(request, cacheName) {
+  try {
+    const response = await fetch(request)
+    if (response && response.status === 200) {
+      const cache = await caches.open(cacheName)
+      cache.put(request, response.clone())
+      await trimCache(cacheName, CACHE_LIMITS.api)
+    }
+    return response
+  } catch (error) {
+    const cached = await caches.match(request)
+    if (cached) {
+      console.log('[SW] Serving from cache (offline):', request.url)
+      return cached
+    }
+    // Return offline page for navigation requests
+    if (request.mode === 'navigate') {
+      return caches.match('/offline')
+    }
+    throw error
+  }
+}
+
+// Cache-first: Try cache, fall back to network (good for images)
+async function cacheFirstStrategy(request, cacheName) {
+  const cached = await caches.match(request)
+  if (cached) {
+    return cached
+  }
+
+  try {
+    const response = await fetch(request)
+    if (response && response.status === 200) {
+      const cache = await caches.open(cacheName)
+      cache.put(request, response.clone())
+      await trimCache(cacheName, CACHE_LIMITS.images)
+    }
+    return response
+  } catch (error) {
+    // Return offline page for navigation requests
+    if (request.mode === 'navigate') {
+      return caches.match('/offline')
+    }
+    throw error
+  }
+}
+
+// Stale-while-revalidate: Return cache immediately, update in background
+async function staleWhileRevalidate(request, cacheName) {
+  const cached = await caches.match(request)
+
+  const fetchPromise = fetch(request).then((response) => {
+    if (response && response.status === 200) {
+      const cache = caches.open(cacheName)
+      cache.then(c => c.put(request, response.clone()))
+      trimCache(cacheName, CACHE_LIMITS.pages)
+    }
+    return response
+  }).catch(() => cached || caches.match('/offline'))
+
+  return cached || fetchPromise
+}
+
+// Trim cache to prevent unlimited growth
+async function trimCache(cacheName, maxItems) {
+  const cache = await caches.open(cacheName)
+  const keys = await cache.keys()
+  if (keys.length > maxItems) {
+    // Delete oldest entries
+    const toDelete = keys.slice(0, keys.length - maxItems)
+    await Promise.all(toDelete.map(key => cache.delete(key)))
+    console.log(`[SW] Trimmed ${toDelete.length} items from ${cacheName}`)
+  }
+}
+
 // Helper functions
 async function syncSavedEvents() {
   try {
     // Get saved events from IndexedDB
     const savedEvents = await getSavedEventsFromIndexedDB()
-    
+
     // Sync with server
     for (const event of savedEvents) {
       if (!event.synced) {
         await syncEventToServer(event)
       }
     }
-    
+
     console.log('[SW] Saved events synced successfully')
   } catch (error) {
     console.error('[SW] Error syncing saved events:', error)
@@ -253,12 +337,12 @@ async function syncEventViews() {
   try {
     // Get unsynced event views from IndexedDB
     const eventViews = await getUnsyncedViewsFromIndexedDB()
-    
+
     // Sync with server
     for (const view of eventViews) {
       await syncViewToServer(view)
     }
-    
+
     console.log('[SW] Event views synced successfully')
   } catch (error) {
     console.error('[SW] Error syncing event views:', error)
@@ -267,16 +351,16 @@ async function syncEventViews() {
 
 async function cacheEventData(event) {
   try {
-    const cache = await caches.open(CACHE_NAME)
-    
+    const cache = await caches.open(IMAGE_CACHE)
+
     // Cache event images
     if (event.image_url) {
       await cache.add(event.image_url)
     }
-    
+
     // Store event data in IndexedDB for offline access
     await storeEventInIndexedDB(event)
-    
+
     console.log('[SW] Event data cached:', event.id)
   } catch (error) {
     console.error('[SW] Error caching event data:', error)

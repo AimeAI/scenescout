@@ -113,33 +113,35 @@ export function NetflixCategoryRow({
   return (
     <div className="mb-8">
       {/* Category Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold flex items-center gap-2">
-          <span>{emoji}</span>
-          {title}
+      <div className="flex items-center justify-between mb-3 sm:mb-4">
+        <h2 className="text-lg sm:text-xl md:text-2xl font-bold flex items-center gap-1 sm:gap-2">
+          <span className="text-xl sm:text-2xl md:text-3xl">{emoji}</span>
+          <span className="truncate">{title}</span>
         </h2>
-        <span className="text-gray-400 text-sm">
+        <span className="text-gray-400 text-xs sm:text-sm flex-shrink-0 ml-2">
           {events.length} events
         </span>
       </div>
 
       {/* Scrollable Row */}
       <div className="relative group">
-        {/* Left Arrow */}
+        {/* Left Arrow - Hidden on mobile */}
         {showLeftArrow && (
           <button
             onClick={() => scroll('left')}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-black/80 hover:bg-black text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+            className="hidden md:block absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-black/80 hover:bg-black text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+            aria-label="Scroll left"
           >
             <ChevronLeft size={20} />
           </button>
         )}
 
-        {/* Right Arrow */}
+        {/* Right Arrow - Hidden on mobile */}
         {showRightArrow && (
           <button
             onClick={() => scroll('right')}
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-black/80 hover:bg-black text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+            className="hidden md:block absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-black/80 hover:bg-black text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+            aria-label="Scroll right"
           >
             <ChevronRight size={20} />
           </button>
@@ -149,18 +151,18 @@ export function NetflixCategoryRow({
         <div
           ref={scrollRef}
           onScroll={handleScroll}
-          className="flex gap-4 overflow-x-auto scrollbar-hide pb-2"
+          className="flex gap-3 sm:gap-4 overflow-x-auto scrollbar-hide pb-2 snap-x snap-mandatory -mx-2 px-2 sm:mx-0 sm:px-0"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {events.map((event, index) => (
             <div
               key={`${event.id}-${index}`}
               onClick={() => onEventClick(event)}
-              className="flex-shrink-0 w-72 cursor-pointer group/item"
+              className="flex-shrink-0 w-56 sm:w-64 md:w-72 cursor-pointer group/item snap-start"
             >
               <div className="bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-700 transition-all duration-300 group-hover/item:scale-105">
                 {/* Event Image */}
-                <div className="relative h-40 overflow-hidden">
+                <div className="relative h-32 sm:h-36 md:h-40 overflow-hidden">
                   <img
                     src={getEventImage(event)}
                     alt={event.title}
@@ -201,14 +203,14 @@ export function NetflixCategoryRow({
                 </div>
 
                 {/* Event Info */}
-                <div className="p-3">
-                  <h3 className="font-semibold text-sm mb-1 line-clamp-2">
+                <div className="p-2 sm:p-3">
+                  <h3 className="font-semibold text-xs sm:text-sm mb-1 line-clamp-2">
                     {event.title}
                   </h3>
-                  <p className="text-xs text-gray-400 mb-2 line-clamp-1">
+                  <p className="text-[10px] sm:text-xs text-gray-400 mb-1 sm:mb-2 line-clamp-1">
                     📍 {event.venue_name}
                   </p>
-                  <p className="text-xs text-gray-300 line-clamp-2">
+                  <p className="text-[10px] sm:text-xs text-gray-300 line-clamp-2">
                     {event.description}
                   </p>
                 </div>
@@ -218,7 +220,7 @@ export function NetflixCategoryRow({
 
           {/* Load More Button */}
           {hasMore && onLoadMore && (
-            <div className="flex-shrink-0 w-72 flex items-center justify-center">
+            <div className="flex-shrink-0 w-56 sm:w-64 md:w-72 flex items-center justify-center snap-start">
               <button
                 onClick={(e) => {
                   e.preventDefault()
@@ -227,7 +229,7 @@ export function NetflixCategoryRow({
                   onLoadMore()
                 }}
                 disabled={loading}
-                className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 disabled:from-gray-700 disabled:to-gray-800 text-white p-6 rounded-lg transition-all duration-300 flex flex-col items-center gap-3 min-h-[200px] justify-center w-full border-2 border-orange-500 hover:border-orange-400"
+                className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 disabled:from-gray-700 disabled:to-gray-800 text-white p-4 sm:p-6 rounded-lg transition-all duration-300 flex flex-col items-center gap-2 sm:gap-3 min-h-[150px] sm:min-h-[180px] md:min-h-[200px] justify-center w-full border-2 border-orange-500 hover:border-orange-400"
               >
                 {loading ? (
                   <>

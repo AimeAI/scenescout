@@ -1,19 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { dedupeEvents } from '@/lib/deduplication/event-deduper'
 import { normalizePrice } from '@/lib/pricing/price-normalizer'
+import { searchQuerySchema } from '@/lib/validation/schemas'
+import { validateAndRateLimit, safeErrorResponse, logValidationFailure } from '@/lib/validation/api-validator'
+import { sanitizeEvents } from '@/lib/validation/sanitize'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
 
+// Rate limit: 60 requests per minute for search
+const SEARCH_RATE_LIMIT = {
+  maxRequests: 60,
+  windowMs: 60 * 1000,
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const query = searchParams.get('q') || 'events'
-    const limit = parseInt(searchParams.get('limit') || '20')
-    const city = searchParams.get('city')
-    const lat = searchParams.get('lat')
-    const lng = searchParams.get('lng')
-    const sortBy = searchParams.get('sort') || 'date' // 'date' or 'relevance'
+    // Validate and rate limit
+    const result = await validateAndRateLimit(
+      request,
+      searchQuerySchema,
+      'search-events',
+      SEARCH_RATE_LIMIT
+    )
+
+    if ('response' in result) {
+      return result.response
+    }
+
+    const { data: params } = result
+    const { q: query, limit, city, lat, lng, sort: sortBy } = params
 
     console.log(`🔍 Searching for: "${query}" (sort: ${sortBy})`)
     
@@ -109,13 +125,16 @@ export async function GET(request: NextRequest) {
     // Apply limit after deduplication
     const limitedEvents = finalEvents.slice(0, limit)
     
+    // Sanitize events to prevent XSS
+    const sanitizedEvents = sanitizeEvents(limitedEvents)
+
     // Apply price normalization if feature flag is enabled
     const eventsWithPricing = process.env.NEXT_PUBLIC_FEATURE_PRICE_V2 === 'true'
-      ? limitedEvents.map(event => ({ ...event, normalizedPrice: normalizePrice(event) }))
-      : limitedEvents
-    
+      ? sanitizedEvents.map(event => ({ ...event, normalizedPrice: normalizePrice(event) }))
+      : sanitizedEvents
+
     console.log(`✅ Found ${eventsWithPricing.length} total events for "${query}" (${allEvents.length} before deduplication)`)
-    
+
     return NextResponse.json({
       success: true,
       query,
@@ -127,18 +146,12 @@ export async function GET(request: NextRequest) {
       },
       timestamp: new Date().toISOString()
     })
-    
+
   } catch (error) {
     console.error('❌ Search error:', error)
-    return NextResponse.json(
-      { 
-        success: false,
-        error: 'Search failed', 
-        details: error instanceof Error ? error.message : 'Unknown error',
-        events: [],
-        count: 0
-      },
-      { status: 500 }
-    )
+    logValidationFailure(request, error instanceof Error ? error.message : 'Unknown error', {
+      endpoint: '/api/search-events',
+    })
+    return safeErrorResponse(error, 'Search failed')
   }
 }

@@ -38,11 +38,13 @@ export function QuickChips({ onChange }: { onChange: (state: ChipState) => void 
         <button
           key={c.id}
           onClick={() => handleClick(c.id)}
-          className={`px-3 py-1.5 text-sm rounded-full border transition-all ${
+          className={`px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm rounded-full border transition-all min-h-[44px] min-w-[44px] flex items-center justify-center ${
             state[c.id]
               ? 'bg-white text-black border-white'
               : 'bg-white/8 hover:bg-white/14 border-white/12 text-white'
           }`}
+          aria-pressed={state[c.id] ? 'true' : 'false'}
+          aria-label={`Filter by ${c.label}`}
         >
           {c.label}
         </button>

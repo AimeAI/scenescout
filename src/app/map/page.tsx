@@ -2,8 +2,21 @@
 
 import { useState, useEffect } from 'react'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { SimpleEventMap } from '@/components/map/SimpleEventMap'
 import { EventGrid } from '@/components/events/EventGrid'
+import dynamic from 'next/dynamic'
+
+// Dynamically import map component (Leaflet) to reduce initial bundle
+const SimpleEventMap = dynamic(() => import('@/components/map/SimpleEventMap').then(m => m.SimpleEventMap), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
+        <p>Loading map...</p>
+      </div>
+    </div>
+  ),
+})
 
 export default function MapPage() {
   const [events, setEvents] = useState([])

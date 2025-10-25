@@ -1,0 +1,20 @@
+# Allow all crawlers
+User-agent: *
+Allow: /
+
+# Disallow admin and API routes
+Disallow: /api/
+Disallow: /admin/
+
+# Disallow private pages
+Disallow: /login
+Disallow: /signup
+
+# Allow well-known paths
+Allow: /.well-known/
+
+# Sitemap
+Sitemap: https://scenescout.app/sitemap.xml
+
+# Crawl delay (be nice to servers)
+Crawl-delay: 1

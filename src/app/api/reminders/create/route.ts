@@ -1,32 +1,70 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabaseClient } from '@/lib/supabase-server'
+import { z } from 'zod'
+import { validateRequestBody, safeErrorResponse, checkRateLimit } from '@/lib/validation/api-validator'
+import { sanitizeEvent } from '@/lib/validation/sanitize'
 
-export const runtime = 'edge'
+// export const runtime = 'edge'
+
+// Validation schema for creating reminders
+const createReminderSchema = z.object({
+  userId: z.string()
+    .max(500, 'User ID too long')
+    .default('anonymous'),
+  eventId: z.string()
+    .min(1, 'Event ID required')
+    .max(500, 'Event ID too long'),
+  eventData: z.object({
+    date: z.string().optional(),
+    start_date: z.string().optional(),
+    time: z.string().optional(),
+    start_time: z.string().optional(),
+  }).passthrough(), // Allow additional fields
+  subscriptionId: z.string()
+    .max(500, 'Subscription ID too long')
+    .optional(),
+}).refine(
+  (data) => data.eventData.date || data.eventData.start_date,
+  'Event must have a date field'
+)
+
+// Rate limit: 20 reminders per minute per user
+const REMINDER_RATE_LIMIT = {
+  maxRequests: 20,
+  windowMs: 60 * 1000,
+}
 
 /**
  * POST /api/reminders/create
  * Create reminder(s) for an event
- *
- * Body: {
- *   userId: string (optional, defaults to 'anonymous'),
- *   eventId: string,
- *   eventData: any,
- *   subscriptionId?: string (optional, from push_subscriptions)
- * }
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = getServiceSupabaseClient()
-    const body = await request.json()
+    // Check rate limit
+    const rateLimitResult = await checkRateLimit(request, 'reminders-create', REMINDER_RATE_LIMIT)
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!
+    }
 
-    const { userId = 'anonymous', eventId, eventData, subscriptionId } = body
-
-    if (!eventId || !eventData) {
+    // Validate request body
+    const validation = await validateRequestBody(request, createReminderSchema)
+    if (!validation.success) {
       return NextResponse.json(
-        { success: false, error: 'eventId and eventData required' },
-        { status: 400 }
+        {
+          success: false,
+          error: validation.error,
+          timestamp: new Date().toISOString(),
+        },
+        { status: validation.status || 400 }
       )
     }
+
+    const { userId, eventId, eventData, subscriptionId } = validation.data!
+
+    // Sanitize event data to prevent XSS
+    const sanitizedEventData = sanitizeEvent(eventData)
+
+    const supabase = getServiceSupabaseClient()
 
     // Get event date/time
     const eventDate = eventData.date || eventData.start_date
@@ -90,10 +128,16 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Use sanitized event data for reminders
+    const sanitizedReminders = reminders.map(r => ({
+      ...r,
+      event_data: sanitizedEventData
+    }))
+
     // Insert reminders
     const { data, error } = await supabase
       .from('event_reminders')
-      .insert(reminders)
+      .insert(sanitizedReminders)
       .select()
 
     if (error) {
@@ -117,12 +161,19 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('❌ Create reminders error:', error)
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    )
+    return safeErrorResponse(error, 'Failed to create reminders')
   }
 }
+
+// Validation schema for deleting reminders
+const deleteReminderSchema = z.object({
+  userId: z.string()
+    .max(500, 'User ID too long')
+    .default('anonymous'),
+  eventId: z.string()
+    .min(1, 'Event ID required')
+    .max(500, 'Event ID too long'),
+})
 
 /**
  * DELETE /api/reminders/create
@@ -130,17 +181,21 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = getServiceSupabaseClient()
-    const body = await request.json()
-
-    const { userId = 'anonymous', eventId } = body
-
-    if (!eventId) {
+    // Validate request body
+    const validation = await validateRequestBody(request, deleteReminderSchema)
+    if (!validation.success) {
       return NextResponse.json(
-        { success: false, error: 'eventId required' },
-        { status: 400 }
+        {
+          success: false,
+          error: validation.error,
+          timestamp: new Date().toISOString(),
+        },
+        { status: validation.status || 400 }
       )
     }
+
+    const { userId, eventId } = validation.data!
+    const supabase = getServiceSupabaseClient()
 
     const { error } = await supabase
       .from('event_reminders')
@@ -162,9 +217,6 @@ export async function DELETE(request: NextRequest) {
 
   } catch (error) {
     console.error('❌ Delete reminders error:', error)
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    )
+    return safeErrorResponse(error, 'Failed to delete reminders')
   }
 }

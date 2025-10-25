@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PriceBadge } from '@/components/events/PriceBadge'
 import { Thumbs } from '@/components/events/Thumbs'
+import { EmptyState, getEmptyState } from '@/components/empty-states'
 import { isSaved, toggleSaved } from '@/lib/saved/store'
 import { trackEvent, isTrackingEnabled } from '@/lib/tracking/client'
 import { motion } from 'framer-motion'
@@ -237,11 +238,22 @@ export default function CategoryPage() {
               <p className="text-xl">Loading {category.title}...</p>
             </div>
           ) : displayedEvents.length === 0 ? (
-            <div className="text-center py-20">
-              <div className="text-6xl mb-4">{category.emoji}</div>
-              <p className="text-xl text-gray-400">No events found for {category.title}</p>
-              <p className="text-sm text-gray-500 mt-2">Check back later for new events</p>
-            </div>
+            <EmptyState
+              {...getEmptyState('noCategoryEvents', {
+                emoji: category.emoji,
+                title: `No ${category.title} Events`,
+                description: `There aren't any ${category.title.toLowerCase()} events available right now.`
+              })}
+              action={{
+                label: 'Browse All Events',
+                onClick: () => router.push('/')
+              }}
+              secondaryAction={{
+                label: 'Go Back',
+                onClick: () => router.back(),
+                variant: 'outline'
+              }}
+            />
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

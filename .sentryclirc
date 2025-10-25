@@ -1,0 +1,7 @@
+[defaults]
+url=https://sentry.io/
+org=
+project=
+
+[auth]
+token=

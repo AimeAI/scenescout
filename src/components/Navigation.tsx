@@ -106,11 +106,11 @@ export default function Navigation() {
       'sticky top-0 z-50 w-full border-b transition-all duration-200',
       isScrolled ? 'bg-background/95 backdrop-blur-md' : 'bg-background'
     )}>
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-center justify-between h-16">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4">
+        <div className="flex items-center justify-between h-14 sm:h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2">
-            <div className="text-2xl font-bold text-primary">SceneScout</div>
+            <div className="text-lg sm:text-xl md:text-2xl font-bold text-primary">SceneScout</div>
           </Link>
 
           {/* Desktop Navigation */}
@@ -185,15 +185,15 @@ export default function Navigation() {
           </div>
 
           {/* Right Side Actions */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 sm:space-x-4">
             {/* Search - Hidden on mobile */}
-            <Button variant="ghost" size="sm" className="hidden md:flex">
+            <Button variant="ghost" size="sm" className="hidden md:flex min-h-[44px] min-w-[44px]">
               <Search className="w-4 h-4" />
             </Button>
 
             {/* Submit Event */}
-            <Link href="/submit">
-              <Button variant="outline" size="sm" className="hidden md:flex">
+            <Link href="/submit" className="hidden md:block">
+              <Button variant="outline" size="sm" className="min-h-[44px]">
                 <Plus className="w-4 h-4 mr-2" />
                 Submit Event
               </Button>
@@ -202,7 +202,7 @@ export default function Navigation() {
             {isAuthenticated ? (
               <>
                 {/* Notifications */}
-                <Button variant="ghost" size="sm" className="relative">
+                <Button variant="ghost" size="sm" className="relative hidden sm:flex min-h-[44px] min-w-[44px]">
                   <Bell className="w-4 h-4" />
                   <Badge variant="destructive" className="absolute -top-1 -right-1 h-4 w-4 p-0 text-xs">
                     3
@@ -212,8 +212,8 @@ export default function Navigation() {
                 {/* User Menu */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                      <Avatar className="h-8 w-8">
+                    <Button variant="ghost" className="relative h-9 w-9 sm:h-10 sm:w-10 rounded-full min-h-[44px] min-w-[44px] p-0">
+                      <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
                         <AvatarImage src={mockUser.avatar} alt={mockUser.name} />
                         <AvatarFallback>{mockUser.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
                       </Avatar>
@@ -265,11 +265,11 @@ export default function Navigation() {
                 </DropdownMenu>
               </>
             ) : (
-              <div className="flex items-center space-x-2">
-                <Button variant="ghost" size="sm">
+              <div className="hidden sm:flex items-center space-x-2">
+                <Button variant="ghost" size="sm" className="min-h-[44px]">
                   Log in
                 </Button>
-                <Button size="sm">
+                <Button size="sm" className="min-h-[44px]">
                   Sign up
                 </Button>
               </div>
@@ -279,10 +279,11 @@ export default function Navigation() {
             <Button
               variant="ghost"
               size="sm"
-              className="md:hidden"
+              className="md:hidden min-h-[44px] min-w-[44px]"
               onClick={() => setIsOpen(!isOpen)}
+              aria-label={isOpen ? "Close menu" : "Open menu"}
             >
-              {isOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+              {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </Button>
           </div>
         </div>
@@ -293,14 +294,14 @@ export default function Navigation() {
             <div className="px-2 pt-2 pb-3 space-y-1">
               <Link
                 href="/feed"
-                className="block px-3 py-2 rounded-md text-base font-medium hover:bg-accent"
+                className="block px-3 py-3 rounded-md text-base font-medium hover:bg-accent min-h-[44px] flex items-center"
                 onClick={() => setIsOpen(false)}
               >
                 Events
               </Link>
               <Link
                 href="/plan"
-                className="block px-3 py-2 rounded-md text-base font-medium hover:bg-accent"
+                className="block px-3 py-3 rounded-md text-base font-medium hover:bg-accent min-h-[44px] flex items-center"
                 onClick={() => setIsOpen(false)}
               >
                 Plans
@@ -309,7 +310,7 @@ export default function Navigation() {
               {/* My Events (Saved) */}
               <Link
                 href="/saved"
-                className="flex items-center px-3 py-2 rounded-md text-base font-medium hover:bg-accent"
+                className="flex items-center px-3 py-3 rounded-md text-base font-medium hover:bg-accent min-h-[44px]"
                 onClick={() => setIsOpen(false)}
               >
                 <Heart className="w-4 h-4 mr-2" />
@@ -340,19 +341,19 @@ export default function Navigation() {
 
               <Link
                 href="/submit"
-                className="block px-3 py-2 rounded-md text-base font-medium hover:bg-accent"
+                className="flex items-center px-3 py-3 rounded-md text-base font-medium hover:bg-accent min-h-[44px]"
                 onClick={() => setIsOpen(false)}
               >
-                <Plus className="w-4 h-4 mr-2 inline" />
+                <Plus className="w-4 h-4 mr-2" />
                 Submit Event
               </Link>
 
               {!isAuthenticated && (
                 <div className="px-3 py-2 space-y-2">
-                  <Button className="w-full" onClick={() => setIsOpen(false)}>
+                  <Button className="w-full min-h-[44px]" onClick={() => setIsOpen(false)}>
                     Sign up
                   </Button>
-                  <Button variant="outline" className="w-full" onClick={() => setIsOpen(false)}>
+                  <Button variant="outline" className="w-full min-h-[44px]" onClick={() => setIsOpen(false)}>
                     Log in
                   </Button>
                 </div>

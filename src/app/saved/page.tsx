@@ -6,6 +6,10 @@ import { PriceBadge } from '@/components/events/PriceBadge';
 import { trackEvent } from '@/lib/tracking/client';
 import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { EmptyState, EMPTY_STATE_VARIANTS } from '@/components/empty-states';
+import { generateBulkICS } from '@/lib/calendar/export';
+import { Calendar, Download } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function SavedPage() {
   const router = useRouter();
@@ -62,6 +66,36 @@ export default function SavedPage() {
     router.push(`/events/${event.id}`);
   };
 
+  const handleExportAll = () => {
+    if (savedEvents.length === 0) {
+      toast.error('No events to export');
+      return;
+    }
+
+    const result = generateBulkICS(savedEvents);
+
+    if (result.success) {
+      const message = result.errors
+        ? `Exported ${result.count} events (${result.errors.length} skipped)`
+        : `Exported ${result.count} events to calendar`;
+
+      toast.success(message, {
+        duration: 4000,
+        icon: '📅',
+      });
+
+      // Track bulk export
+      trackEvent('calendar_export_bulk', {
+        count: result.count,
+        hasErrors: !!result.errors,
+      });
+    } else {
+      toast.error(`Failed to export events: ${result.error}`, {
+        duration: 4000,
+      });
+    }
+  };
+
   if (loading) {
     return (
       <AppLayout>
@@ -76,16 +110,16 @@ export default function SavedPage() {
   if (error) {
     return (
       <AppLayout>
-        <div className="p-6 text-center py-12 max-w-md mx-auto">
-          <div className="text-6xl mb-4">⚠️</div>
-          <h3 className="text-xl font-semibold mb-2">Error Loading Saved Events</h3>
-          <p className="text-gray-400 mb-6">{error}</p>
-          <button
-            onClick={loadSavedEvents}
-            className="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
-          >
-            Retry
-          </button>
+        <div className="p-6">
+          <EmptyState
+            {...EMPTY_STATE_VARIANTS.loadingError}
+            title="Error Loading Saved Events"
+            description={error}
+            action={{
+              label: 'Try Again',
+              onClick: loadSavedEvents
+            }}
+          />
         </div>
       </AppLayout>
     );
@@ -94,10 +128,14 @@ export default function SavedPage() {
   if (savedEvents.length === 0) {
     return (
       <AppLayout>
-        <div className="p-6 text-center py-12">
-          <div className="text-6xl mb-4">💾</div>
-          <h3 className="text-xl font-semibold mb-2">No Saved Events</h3>
-          <p className="text-gray-400">Save some events to see them here!</p>
+        <div className="p-6">
+          <EmptyState
+            {...EMPTY_STATE_VARIANTS.noSavedEvents}
+            action={{
+              label: 'Browse Events',
+              onClick: () => router.push('/')
+            }}
+          />
         </div>
       </AppLayout>
     );
@@ -106,7 +144,21 @@ export default function SavedPage() {
   return (
     <AppLayout>
       <div className="p-6">
-        <h1 className="text-2xl font-bold mb-4">Saved Events ({savedEvents.length})</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <h1 className="text-2xl font-bold">Saved Events ({savedEvents.length})</h1>
+
+          {savedEvents.length > 0 && (
+            <button
+              onClick={handleExportAll}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-medium transition-all duration-200 hover:scale-105 shadow-lg"
+            >
+              <Download className="w-4 h-4" />
+              Export All to Calendar
+              <Calendar className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {savedEvents.map(event => (
           <div key={event.id} className="bg-gray-900 rounded-lg overflow-hidden hover:ring-2 hover:ring-purple-500 transition-all cursor-pointer">

@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { ArrowLeft, MapPin, Navigation, RefreshCw } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { EventCard } from '@/components/events/EventCard'
+import { EmptyState, EMPTY_STATE_VARIANTS } from '@/components/empty-states'
+import { EventCardSkeletonGrid } from '@/components/skeletons'
 import {
   requestUserLocation,
   getStoredLocation,
@@ -330,40 +332,51 @@ export default function NearMePage() {
             Discover events happening within 10 miles of your location today
           </p>
 
-          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 text-center">
-            <MapPin className="w-12 h-12 mx-auto mb-4 text-purple-400" />
-            <h3 className="text-xl font-semibold mb-2">Enable Location</h3>
-            <p className="text-white/60 mb-4">
-              Allow location access to discover events near you
-            </p>
+          {permissionDenied ? (
+            <EmptyState
+              {...EMPTY_STATE_VARIANTS.locationDenied}
+              action={{
+                label: loading ? 'Getting location...' : 'Try Again',
+                onClick: handleRequestLocation,
+                variant: 'default'
+              }}
+              secondaryAction={{
+                label: 'Browse All Events',
+                onClick: () => router.push('/'),
+                variant: 'outline'
+              }}
+            />
+          ) : !isGeolocationSupported() ? (
+            <EmptyState
+              {...EMPTY_STATE_VARIANTS.locationUnavailable}
+              action={{
+                label: 'Select City Manually',
+                onClick: () => router.push('/'),
+                variant: 'default'
+              }}
+            />
+          ) : (
+            <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 text-center">
+              <MapPin className="w-12 h-12 mx-auto mb-4 text-purple-400" />
+              <h3 className="text-xl font-semibold mb-2">Enable Location</h3>
+              <p className="text-white/60 mb-4">
+                Allow location access to discover events near you
+              </p>
 
-            {error && !permissionDenied && (
-              <p className="text-red-400 text-sm mb-4">{error}</p>
-            )}
+              {error && (
+                <p className="text-red-400 text-sm mb-4">{error}</p>
+              )}
 
-            {permissionDenied && (
-              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-4">
-                <p className="text-yellow-400 text-sm">
-                  Location access was denied. To enable:
-                  <br />
-                  1. Click the 🔒 icon in your browser's address bar
-                  <br />
-                  2. Allow location permissions for this site
-                  <br />
-                  3. Refresh the page
-                </p>
-              </div>
-            )}
-
-            <button
-              onClick={handleRequestLocation}
-              disabled={loading}
-              className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 px-6 rounded-lg transition-colors"
-            >
-              <Navigation className="w-5 h-5" />
-              {loading ? 'Getting location...' : 'Enable Location'}
-            </button>
-          </div>
+              <button
+                onClick={handleRequestLocation}
+                disabled={loading}
+                className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 px-6 rounded-lg transition-colors"
+              >
+                <Navigation className="w-5 h-5" />
+                {loading ? 'Getting location...' : 'Enable Location'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -504,22 +517,22 @@ export default function NearMePage() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <div
-                key={i}
-                className="bg-gray-900/50 border border-gray-800 rounded-lg h-64 animate-pulse"
-              />
-            ))}
-          </div>
+          <EventCardSkeletonGrid count={9} />
         ) : events.length === 0 ? (
-          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-8 text-center">
-            <p className="text-white/60">
-              No events found within 10 miles today.
-              <br />
-              <span className="text-sm">Try checking back later or browse all events.</span>
-            </p>
-          </div>
+          <EmptyState
+            {...EMPTY_STATE_VARIANTS.noNearbyEvents}
+            description={`No events found within ${radius} miles ${timeFilter === 'today' ? 'today' : timeFilter === 'week' ? 'this week' : ''}.`}
+            action={{
+              label: 'Increase Radius',
+              onClick: () => setRadius(radius === 50 ? 50 : radius === 25 ? 50 : radius === 10 ? 25 : 50),
+              variant: 'default'
+            }}
+            secondaryAction={{
+              label: 'Browse All Events',
+              onClick: () => router.push('/'),
+              variant: 'outline'
+            }}
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {events.map((event) => (

@@ -1,12 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react'
 import { useRouter } from 'next/navigation'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { trackEvent, readInteractions, isTrackingEnabled } from '@/lib/tracking/client'
 import { computeAffinity, reorderRows } from '@/lib/tracking/affinity'
 import { PriceBadge } from '@/components/events/PriceBadge'
-import { PersonalizedRails } from '@/components/personalization/PersonalizedRails'
 import { manageDynamicRails, isDynamicCategoriesEnabled } from '@/lib/personalization/dynamic-categories'
 import { Sidebar } from '@/components/nav/Sidebar'
 import { SearchBar } from '@/components/search/SearchBar'
@@ -17,12 +16,13 @@ import { toggleSaved, isSaved } from '@/lib/saved/store'
 import { CategoryRail } from '@/components/events/CategoryRail'
 import { clearAllEventCache } from '@/lib/events/clearCache'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ForYouHero } from '@/components/personalization/ForYouHero'
-import { HappeningNowBanner } from '@/components/spontaneity/HappeningNowBanner'
 import { generateDynamicCategories, mergeCategoriesWithDynamic } from '@/lib/personalization/dynamicCategories'
 import toast from 'react-hot-toast'
 import { SaveConfirmationModal } from '@/components/reminders/SaveConfirmationModal'
 import { isFirstSave, markSaveModalSeen } from '@/lib/notifications/requestPermission'
+import { PersonalizedRails } from '@/components/personalization/PersonalizedRails'
+import { ForYouHero } from '@/components/personalization/ForYouHero'
+import { HappeningNowBanner } from '@/components/spontaneity/HappeningNowBanner'
 
 // Enhanced categories with better naming and coverage
 // Using simple keywords that work with both Ticketmaster and EventBrite
@@ -171,7 +171,7 @@ export default function HomePage() {
 
   // No longer needed - using react-hot-toast directly
 
-  const handleEventClick = (event: any) => {
+  const handleEventClick = useCallback((event: any) => {
     console.log('🎯 EVENT CLICKED:', {
       id: event?.id,
       title: event?.title,
@@ -209,9 +209,9 @@ export default function HomePage() {
     } else {
       console.warn('⚠️ NO EVENT ID - cannot navigate')
     }
-  }
+  }, [router])
 
-  const handleSaveEvent = (event: any) => {
+  const handleSaveEvent = useCallback((event: any) => {
     const wasSaved = isSaved(event.id)
 
     // If unsaving, just toggle and show toast
@@ -254,15 +254,15 @@ export default function HomePage() {
       // For subsequent saves, just show a quick toast
       toast.success('❤️ Event saved!', { duration: 2000 })
     }
-  }
+  }, [isMounted, savedEvents])
 
   // Handle chip state changes
-  const handleChipChange = (newState: ChipState) => {
+  const handleChipChange = useCallback((newState: ChipState) => {
     setChipState(newState)
-  }
+  }, [])
 
-  // Client-side filter logic for chips
-  const filterEventsByChip = (events: any[]) => {
+  // Client-side filter logic for chips - memoized for performance
+  const filterEventsByChip = useCallback((events: any[]) => {
     if (!chipState.tonight && !chipState.now && !chipState.free && !chipState.near) {
       return events
     }
@@ -281,10 +281,10 @@ export default function HomePage() {
       userLng: userLocation?.lng,
       maxWalkMin: 20
     })
-  }
+  }, [chipState, userLocation])
 
-  // Scroll function for arrows
-  const scroll = (categoryId: string, direction: 'left' | 'right') => {
+  // Scroll function for arrows - memoized
+  const scroll = useCallback((categoryId: string, direction: 'left' | 'right') => {
     const container = scrollRefs.current[categoryId]
     if (container) {
       const scrollAmount = 300 // Scroll by one card width plus gap
@@ -293,7 +293,7 @@ export default function HomePage() {
         : container.scrollLeft + scrollAmount
       container.scrollTo({ left: newScrollLeft, behavior: 'smooth' })
     }
-  }
+  }, [])
 
   // Load saved events from localStorage
   useEffect(() => {
@@ -462,40 +462,80 @@ export default function HomePage() {
     }
   }, [visibleCategoryCount, isLoadingMoreCategories, displayCategories])
 
+  // Organization Schema for SEO
+  const organizationSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'SceneScout',
+    url: 'https://scenescout.app',
+    logo: 'https://scenescout.app/icon-512x512.png',
+    description: 'Discover the best events, concerts, comedy shows, and nightlife in Toronto with personalized recommendations',
+    sameAs: [
+      'https://twitter.com/scenescout',
+      'https://facebook.com/scenescout',
+      'https://instagram.com/scenescout'
+    ],
+    contactPoint: {
+      '@type': 'ContactPoint',
+      contactType: 'Customer Service',
+      availableLanguage: 'English'
+    }
+  }
+
+  const websiteSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'SceneScout',
+    url: 'https://scenescout.app',
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: 'https://scenescout.app/search?q={search_term_string}',
+      'query-input': 'required name=search_term_string'
+    }
+  }
+
   return (
     <AppLayout>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
+      />
       <div className="min-h-screen bg-black text-white">
         {/* Hero Section */}
-        <div className="relative h-[40vh] bg-gradient-to-br from-purple-900 via-blue-900 to-black flex items-center justify-center">
-          <div className="text-center z-10 max-w-4xl mx-auto px-4">
-            <h1 className="text-5xl font-bold mb-4">🎯 SceneScout</h1>
-            <p className="text-xl text-gray-300 mb-2">
+        <div className="relative min-h-[50vh] sm:h-[45vh] md:h-[40vh] bg-gradient-to-br from-purple-900 via-blue-900 to-black flex items-center justify-center py-8 sm:py-0">
+          <div className="text-center z-10 max-w-4xl mx-auto px-3 sm:px-4 md:px-6">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-3 sm:mb-4">🎯 SceneScout</h1>
+            <p className="text-base sm:text-lg md:text-xl text-gray-300 mb-2">
               {userLocation ? 'Events Near You' : 'Discover Events'}
             </p>
-            <p className="text-sm text-gray-400 mb-6">
+            <p className="text-xs sm:text-sm text-gray-400 mb-4 sm:mb-6">
               Real-time events from Ticketmaster & EventBrite - {CATEGORIES.length} Curated Categories
             </p>
-            <div className="text-xs text-gray-500 mb-4 max-w-2xl mx-auto">
-              🎵 Entertainment: Music, Nightlife, Comedy, Theatre, Arts & Film<br/>
-              🌟 Lifestyle: Food Pop-ups, Wellness, Outdoors, Date Night & Markets<br/>
-              🚀 Special: Late Night, Family, Tech, Neighborhood & Halloween
+            <div className="text-[10px] sm:text-xs text-gray-500 mb-3 sm:mb-4 max-w-2xl mx-auto leading-relaxed">
+              🎵 Entertainment: Music, Nightlife, Comedy, Theatre, Arts & Film<br className="hidden sm:block" />
+              <span className="sm:hidden"> • </span>🌟 Lifestyle: Food Pop-ups, Wellness, Outdoors, Date Night & Markets<br className="hidden sm:block" />
+              <span className="sm:hidden"> • </span>🚀 Special: Late Night, Family, Tech, Neighborhood & Halloween
             </div>
             
             {totalEvents > 0 && (
-              <div className="flex justify-center gap-8 mb-4">
+              <div className="flex justify-center gap-4 sm:gap-8 mb-3 sm:mb-4">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-orange-500">{totalEvents}</div>
-                  <div className="text-xs text-gray-400">Events Found</div>
+                  <div className="text-xl sm:text-2xl font-bold text-orange-500">{totalEvents}</div>
+                  <div className="text-[10px] sm:text-xs text-gray-400">Events Found</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-green-500">{freeEvents}</div>
-                  <div className="text-xs text-gray-400">Free Events</div>
+                  <div className="text-xl sm:text-2xl font-bold text-green-500">{freeEvents}</div>
+                  <div className="text-[10px] sm:text-xs text-gray-400">Free Events</div>
                 </div>
               </div>
             )}
 
             {/* Search Bar - New Component */}
-            <div className="max-w-md mx-auto mb-4">
+            <div className="max-w-md mx-auto mb-3 sm:mb-4">
               <SearchBar onResults={(results) => setSearchResults(results)} />
 
               {/* Fallback to existing search if SEARCH_V1 disabled */}
@@ -528,11 +568,11 @@ export default function HomePage() {
             </div>
 
             {/* Quick Filter Chips */}
-            <div className="max-w-md mx-auto mb-4">
+            <div className="max-w-md mx-auto mb-3 sm:mb-4">
               <QuickChips onChange={handleChipChange} />
             </div>
 
-            <div className="text-sm text-gray-500">
+            <div className="text-xs sm:text-sm text-gray-500 px-4">
               {userLocation ?
                 '📍 Showing events sorted by distance and popularity' :
                 '📍 Getting your location for personalized results...'
@@ -543,7 +583,7 @@ export default function HomePage() {
             {isMounted && isTrackingEnabled() && (
               <button
                 onClick={() => setShowDebug(!showDebug)}
-                className="mt-4 text-xs text-gray-600 hover:text-purple-400 transition-colors"
+                className="mt-3 sm:mt-4 text-[10px] sm:text-xs text-gray-600 hover:text-purple-400 transition-colors min-h-[44px] px-4"
               >
                 {showDebug ? '🔍 Hide Personalization Debug' : '🔍 Show Personalization Debug'}
               </button>
@@ -553,10 +593,10 @@ export default function HomePage() {
 
         {/* Personalization Status Banner */}
         {isMounted && (
-          <div className="bg-gradient-to-r from-purple-600/20 to-pink-600/20 border-b border-purple-500/30 py-3 px-8">
-            <div className="flex items-center justify-between max-w-7xl mx-auto">
-              <div className="flex items-center gap-4">
-                <div className="text-sm">
+          <div className="bg-gradient-to-r from-purple-600/20 to-pink-600/20 border-b border-purple-500/30 py-2 sm:py-3 px-3 sm:px-6 md:px-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4 max-w-7xl mx-auto">
+              <div className="flex items-center gap-2 sm:gap-4 flex-1">
+                <div className="text-xs sm:text-sm leading-relaxed">
                   {(() => {
                     const interactions = readInteractions()
                     if (interactions.length === 0) {
@@ -581,7 +621,7 @@ export default function HomePage() {
               </div>
               <button
                 onClick={() => setShowDebug(!showDebug)}
-                className="text-xs px-3 py-1 rounded bg-purple-600/30 hover:bg-purple-600/50 transition-colors"
+                className="text-[10px] sm:text-xs px-2 sm:px-3 py-1 rounded bg-purple-600/30 hover:bg-purple-600/50 transition-colors min-h-[44px] flex items-center flex-shrink-0"
               >
                 {showDebug ? 'Hide' : 'Show'} Debug
               </button>
@@ -612,17 +652,17 @@ export default function HomePage() {
           <PersonalizedRails
             allEvents={Object.values(categoryEvents).flat()}
             onEventClick={handleEventClick}
-            className="mb-8"
+            className="mb-6 sm:mb-8"
           />
         )}
 
         {/* Event Categories */}
-        <div className="px-8 py-8 space-y-8">
+        <div className="px-3 sm:px-6 md:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
           {loading ? (
-            <div className="text-center py-20">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-500 mx-auto mb-4"></div>
-              <p className="text-xl">🔍 Finding events near you...</p>
-              <p className="text-sm text-gray-400 mt-2">Loading {CATEGORIES.length} curated categories from Ticketmaster & EventBrite...</p>
+            <div className="text-center py-12 sm:py-16 md:py-20">
+              <div className="animate-spin rounded-full h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16 border-b-2 border-orange-500 mx-auto mb-3 sm:mb-4"></div>
+              <p className="text-base sm:text-lg md:text-xl px-4">🔍 Finding events near you...</p>
+              <p className="text-xs sm:text-sm text-gray-400 mt-2 px-4">Loading {CATEGORIES.length} curated categories from Ticketmaster & EventBrite...</p>
             </div>
           ) : (
             <AnimatePresence mode="popLayout">
@@ -693,14 +733,14 @@ export default function HomePage() {
                       scale: { duration: 0.6, ease: 'easeOut' }
                     }}
                     whileHover={affinityScore > 0 ? { scale: 1.01 } : {}}
-                    className="mb-8 relative">
-                    <div className="flex items-center justify-between mb-4">
+                    className="mb-6 sm:mb-8 relative">
+                    <div className="flex items-center justify-between mb-3 sm:mb-4">
                       <h2
-                        className="text-2xl font-bold flex items-center gap-2 cursor-pointer hover:text-orange-500 transition-colors group"
+                        className="text-lg sm:text-xl md:text-2xl font-bold flex items-center gap-1 sm:gap-2 cursor-pointer hover:text-orange-500 transition-colors group"
                         onClick={() => router.push(`/category/${category.id}`)}
                       >
-                        <span className="group-hover:scale-110 transition-transform">{category.emoji}</span>
-                        <span className="border-b-2 border-transparent group-hover:border-orange-500 transition-all">
+                        <span className="text-xl sm:text-2xl md:text-3xl group-hover:scale-110 transition-transform">{category.emoji}</span>
+                        <span className="border-b-2 border-transparent group-hover:border-orange-500 transition-all truncate">
                           {category.title}
                         </span>
                         <svg
@@ -712,17 +752,17 @@ export default function HomePage() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                         </svg>
                         {isPersonalized && (
-                          <span className="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-medium">
+                          <span className="hidden sm:inline ml-2 text-[10px] sm:text-xs bg-purple-100 text-purple-700 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full font-medium">
                             ✨ Picked For You
                           </span>
                         )}
                         {showDebug && (
-                          <span className="ml-2 text-xs bg-gray-800 text-gray-300 px-2 py-1 rounded font-mono">
+                          <span className="hidden md:inline ml-2 text-xs bg-gray-800 text-gray-300 px-2 py-1 rounded font-mono">
                             {(affinityScore * 100).toFixed(1)}%
                           </span>
                         )}
                       </h2>
-                      <span className="text-gray-400 text-sm">
+                      <span className="text-gray-400 text-xs sm:text-sm flex-shrink-0 ml-2">
                         {filteredEvents.length} events
                       </span>
                     </div>
@@ -753,19 +793,19 @@ export default function HomePage() {
 
                   <div
                     ref={(el) => { scrollRefs.current[category.id] = el }}
-                    className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 snap-x snap-mandatory scroll-smooth"
+                    className="flex gap-3 sm:gap-4 overflow-x-auto scrollbar-hide pb-2 snap-x snap-mandatory scroll-smooth -mx-2 px-2 sm:mx-0 sm:px-0"
                   >
                     {filteredEvents.length === 0 ? (
-                      <div className="flex-shrink-0 w-72 p-6 bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-600 text-center">
-                        <div className="text-3xl mb-2">{category.emoji}</div>
-                        <p className="text-gray-400 text-sm mb-2">No events found</p>
-                        <p className="text-gray-500 text-xs">Try a different location or check back later</p>
+                      <div className="flex-shrink-0 w-56 sm:w-64 md:w-72 p-4 sm:p-6 bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-600 text-center">
+                        <div className="text-2xl sm:text-3xl mb-2">{category.emoji}</div>
+                        <p className="text-gray-400 text-xs sm:text-sm mb-2">No events found</p>
+                        <p className="text-gray-500 text-[10px] sm:text-xs">Try a different location or check back later</p>
                       </div>
                     ) : (
                       filteredEvents.map((event, index) => (
                       <div
                         key={`${event.id}-${index}`}
-                        className="flex-shrink-0 w-72 cursor-pointer group snap-start"
+                        className="flex-shrink-0 w-56 sm:w-64 md:w-72 cursor-pointer group snap-start"
                         onClick={() => handleEventClick(event)}
                       >
                         <div className="bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-700 transition-all duration-300 group-hover:scale-105 relative">
@@ -775,13 +815,14 @@ export default function HomePage() {
                               e.stopPropagation()
                               handleSaveEvent(event)
                             }}
-                            className="absolute top-2 left-2 z-10 bg-black/70 hover:bg-black text-white p-2 rounded-full transition-colors"
+                            className="absolute top-2 left-2 z-10 bg-black/70 hover:bg-black text-white p-1.5 sm:p-2 rounded-full transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                            aria-label={isSaved(event.id) ? "Remove from saved" : "Save event"}
                           >
                             {isSaved(event.id) ? '❤️' : '🤍'}
                           </button>
 
                           {/* Event Image */}
-                          <div className="relative h-40 overflow-hidden">
+                          <div className="relative h-32 sm:h-36 md:h-40 overflow-hidden">
                             {event.image_url ? (
                               <img
                                 src={event.image_url}
@@ -823,17 +864,17 @@ export default function HomePage() {
                           </div>
 
                           {/* Event Info */}
-                          <div className="p-3">
-                            <h3 className="font-semibold text-sm mb-1 line-clamp-2 text-white">
+                          <div className="p-2 sm:p-3">
+                            <h3 className="font-semibold text-xs sm:text-sm mb-1 line-clamp-2 text-white">
                               {event.title}
                             </h3>
-                            
-                            <p className="text-xs text-gray-400 mb-1">
+
+                            <p className="text-[10px] sm:text-xs text-gray-400 mb-1">
                               📍 {event.venue_name}
                             </p>
-                            
+
                             {event.description && (
-                              <p className="text-xs text-gray-300 mb-2 line-clamp-2">
+                              <p className="text-[10px] sm:text-xs text-gray-300 mb-1 sm:mb-2 line-clamp-2">
                                 {event.description}
                               </p>
                             )}

@@ -171,6 +171,165 @@ export function generateICS(event: EventData) {
 }
 
 /**
+ * Generate ICS file for multiple events (bulk export)
+ * Downloads a single .ics file containing all events
+ *
+ * @param events Array of event data to export
+ * @returns Result object with success status and filename or error message
+ */
+export function generateBulkICS(events: EventData[]) {
+  try {
+    if (!events || events.length === 0) {
+      throw new Error('No events to export')
+    }
+
+    // Generate individual event strings
+    const eventStrings: string[] = []
+    let successCount = 0
+    const errors: string[] = []
+
+    for (const event of events) {
+      try {
+        const eventDate = event.date || event.event_date || event.start_date
+        const eventTime = event.time || event.start_time
+
+        if (!eventDate) {
+          errors.push(`${event.title}: Missing date`)
+          continue
+        }
+
+        // Handle both ISO format and separate date/time
+        let startDate: Date
+
+        if (eventDate.includes('T')) {
+          startDate = new Date(eventDate)
+        } else {
+          const [year, month, day] = eventDate.split('-').map(Number)
+          let hour = 19
+          let minute = 0
+
+          if (eventTime) {
+            const timeParts = eventTime.split(':')
+            const parsedHour = parseInt(timeParts[0], 10)
+            const parsedMinute = timeParts[1] ? parseInt(timeParts[1], 10) : 0
+
+            if (!isNaN(parsedHour)) hour = parsedHour
+            if (!isNaN(parsedMinute)) minute = parsedMinute
+          }
+
+          startDate = new Date(year, month - 1, day, hour, minute)
+        }
+
+        const start: DateArray = [
+          startDate.getFullYear(),
+          startDate.getMonth() + 1,
+          startDate.getDate(),
+          startDate.getHours(),
+          startDate.getMinutes()
+        ]
+
+        const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000)
+        const end: DateArray = [
+          endDate.getFullYear(),
+          endDate.getMonth() + 1,
+          endDate.getDate(),
+          endDate.getHours(),
+          endDate.getMinutes()
+        ]
+
+        const venueName = event.venue_name || event.venue?.name || ''
+        const venueAddress = event.address || event.venue_address || event.venue?.address || ''
+        const city = event.city || ''
+        const locationParts = [venueName, venueAddress, city].filter(Boolean)
+        const location = locationParts.join(', ') || 'Location TBA'
+
+        const description = event.description || `Join us for ${event.title}!`
+        const ticketUrl = event.external_url || event.url || event.ticket_url || ''
+        const eventUrl = ticketUrl || `https://scenescout.app/events/${event.id}`
+
+        const fullDescription = [
+          description,
+          '',
+          '📍 Location:',
+          location,
+          '',
+          '🎫 Get tickets:',
+          ticketUrl || 'Check SceneScout for details',
+          '',
+          '🔗 Event page:',
+          eventUrl,
+          '',
+          '---',
+          'Added via SceneScout - Discover urban culture & events',
+          'https://scenescout.app'
+        ].join('\n')
+
+        const eventConfig: EventAttributes = {
+          start,
+          end,
+          title: event.title,
+          description: fullDescription,
+          location,
+          url: eventUrl,
+          status: 'CONFIRMED',
+          busyStatus: 'BUSY',
+          organizer: { name: 'SceneScout', email: 'events@scenescout.app' },
+          alarms: [
+            {
+              action: 'display',
+              description: `Reminder: ${event.title} starts in 15 minutes!`,
+              trigger: { minutes: 15, before: true }
+            }
+          ]
+        }
+
+        const { error, value } = createEvent(eventConfig)
+
+        if (error) {
+          errors.push(`${event.title}: ${error.message}`)
+          continue
+        }
+
+        if (value) {
+          eventStrings.push(value)
+          successCount++
+        }
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error'
+        errors.push(`${event.title}: ${errorMsg}`)
+      }
+    }
+
+    if (successCount === 0) {
+      throw new Error(`Failed to export any events. Errors: ${errors.join(', ')}`)
+    }
+
+    // Combine all events into a single ICS file
+    const icsContent = eventStrings.join('\n')
+
+    // Generate filename with date and count
+    const today = new Date().toISOString().split('T')[0]
+    const filename = `scenescout-events-${successCount}-${today}.ics`
+
+    // Trigger download
+    downloadICS(icsContent, filename)
+
+    return {
+      success: true,
+      filename,
+      count: successCount,
+      errors: errors.length > 0 ? errors : undefined
+    }
+  } catch (error) {
+    console.error('Failed to generate bulk calendar export:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }
+  }
+}
+
+/**
  * Trigger browser download of ICS file
  */
 function downloadICS(content: string, filename: string) {

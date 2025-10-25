@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { EventCard } from '@/components/events/EventCard'
+import { EmptyState, EMPTY_STATE_VARIANTS } from '@/components/empty-states'
+import { SearchResultsSkeleton } from '@/components/skeletons'
 import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -98,9 +100,9 @@ export default function SearchPage() {
 
         {/* Loading State */}
         {loading && (
-          <div className="text-center py-12">
-            <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-gray-400">Searching for "{searchQuery}"...</p>
+          <div className="max-w-7xl mx-auto">
+            <p className="text-gray-400 mb-6 text-center">Searching for "{searchQuery}"...</p>
+            <SearchResultsSkeleton count={12} />
           </div>
         )}
 
@@ -130,37 +132,42 @@ export default function SearchPage() {
 
         {/* Error State */}
         {error && !loading && (
-          <div className="text-center py-12 max-w-md mx-auto">
-            <div className="text-6xl mb-4">⚠️</div>
-            <h3 className="text-xl font-semibold mb-2">Search Error</h3>
-            <p className="text-gray-400 mb-6">{error}</p>
-            <Button onClick={handleSearch}>Retry Search</Button>
-          </div>
+          <EmptyState
+            {...EMPTY_STATE_VARIANTS.loadingError}
+            description={error}
+            action={{
+              label: 'Retry Search',
+              onClick: handleSearch
+            }}
+          />
         )}
 
-        {/* Empty State */}
+        {/* Empty State - No Results */}
         {!loading && !error && hasSearched && events.length === 0 && (
-          <div className="text-center py-12 max-w-md mx-auto">
-            <div className="text-6xl mb-4">🔍</div>
-            <h3 className="text-xl font-semibold mb-2">No Events Found</h3>
-            <p className="text-gray-400 mb-6">
-              No events found for "{searchQuery}". Try different keywords or check back later.
-            </p>
-            <Button onClick={() => router.push('/')} variant="outline">
-              Browse All Events
-            </Button>
-          </div>
+          <EmptyState
+            {...EMPTY_STATE_VARIANTS.noSearchResults}
+            description={`We couldn't find any events matching "${searchQuery}".`}
+            action={{
+              label: 'Browse All Events',
+              onClick: () => router.push('/'),
+              variant: 'default'
+            }}
+            secondaryAction={{
+              label: 'Clear Search',
+              onClick: () => {
+                setSearchQuery('')
+                setHasSearched(false)
+              },
+              variant: 'outline'
+            }}
+          />
         )}
 
-        {/* Initial State */}
+        {/* Initial State - Before Search */}
         {!hasSearched && !loading && (
-          <div className="text-center py-12 max-w-md mx-auto">
-            <div className="text-6xl mb-4">🎯</div>
-            <h3 className="text-xl font-semibold mb-2">Search for Events</h3>
-            <p className="text-gray-400">
-              Enter keywords to find concerts, comedy shows, sports events, and more.
-            </p>
-          </div>
+          <EmptyState
+            {...EMPTY_STATE_VARIANTS.searchInitial}
+          />
         )}
       </div>
     </AppLayout>

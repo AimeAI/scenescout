@@ -1,31 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabaseClient } from '@/lib/supabase-server'
 import { transformEventRow } from '@/lib/event-normalizer'
+import { z } from 'zod'
+import { validateSearchParams, safeErrorResponse, checkRateLimit } from '@/lib/validation/api-validator'
+import { sanitizeEvents } from '@/lib/validation/sanitize'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
 
+// Events API query schema
+const eventsQuerySchema = z.object({
+  category: z.string().max(100).optional(),
+  featured: z.enum(['true', 'false']).optional().transform(val => val === 'true'),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  bounds: z.string().regex(/^-?\d+\.?\d*,-?\d+\.?\d*,-?\d+\.?\d*,-?\d+\.?\d*$/).optional(),
+  lat: z.coerce.number().min(-90).max(90).optional(),
+  lng: z.coerce.number().min(-180).max(180).optional(),
+  radius: z.coerce.number().int().min(1).max(500).default(50),
+  oneOff: z.enum(['true', 'false']).optional().transform(val => val === 'true'),
+  hasTickets: z.enum(['true', 'false']).optional().transform(val => val === 'true'),
+  isFree: z.enum(['true', 'false']).optional().transform(val => val === 'true'),
+  priceMin: z.coerce.number().min(0).optional(),
+  priceMax: z.coerce.number().min(0).optional(),
+})
+
+// Rate limit: 100 requests per minute
+const EVENTS_RATE_LIMIT = {
+  maxRequests: 100,
+  windowMs: 60 * 1000,
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const supabase = getServiceSupabaseClient()
+    // Check rate limit
+    const rateLimitResult = await checkRateLimit(request, 'events', EVENTS_RATE_LIMIT)
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!
+    }
 
-    const { searchParams } = new URL(request.url)
-    const category = searchParams.get('category')
-    const featured = searchParams.get('featured') === 'true'
-    const limit = parseInt(searchParams.get('limit') || '50')
-    const bounds = searchParams.get('bounds')
-    
-    // Location-based filtering
-    const lat = searchParams.get('lat')
-    const lng = searchParams.get('lng')
-    const radius = parseInt(searchParams.get('radius') || '50') // Default 50km radius
-    
-    // Event type filtering
-    const isOneOff = searchParams.get('oneOff') === 'true'
-    const hasTickets = searchParams.get('hasTickets') === 'true'
-    const isFree = searchParams.get('isFree') === 'true'
-    const priceMin = searchParams.get('priceMin')
-    const priceMax = searchParams.get('priceMax')
+    // Validate query parameters
+    const validation = validateSearchParams(request, eventsQuerySchema)
+    if (!validation.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: validation.error,
+          timestamp: new Date().toISOString(),
+        },
+        { status: validation.status || 400 }
+      )
+    }
+
+    const params = validation.data!
+    const {
+      category,
+      featured,
+      limit,
+      bounds,
+      lat,
+      lng,
+      radius,
+      isOneOff,
+      hasTickets,
+      isFree,
+      priceMin,
+      priceMax,
+    } = params
+
+    const supabase = getServiceSupabaseClient()
 
     let query = supabase
       .from('events')
@@ -135,26 +177,26 @@ export async function GET(request: NextRequest) {
 
     // Only return events with valid location data (no mock data)
     events = events.filter(event => {
-      const hasLocation = (event.latitude && event.longitude) || 
+      const hasLocation = (event.latitude && event.longitude) ||
                          (event.venue?.latitude && event.venue?.longitude)
-      return hasLocation && 
+      return hasLocation &&
              event.source !== 'mock' &&
              !event.id.startsWith('mock-')
     })
 
+    // Sanitize events to prevent XSS
+    const sanitizedEvents = sanitizeEvents(events)
+
     return NextResponse.json({
-      events,
-      count: events.length,
+      events: sanitizedEvents,
+      count: sanitizedEvents.length,
       success: true,
-      location: lat && lng ? { lat: parseFloat(lat), lng: parseFloat(lng), radius } : null
+      location: lat && lng ? { lat, lng, radius } : null
     })
 
   } catch (error) {
     console.error('Events API error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error', details: (error as Error).message },
-      { status: 500 }
-    )
+    return safeErrorResponse(error, 'Failed to fetch events')
   }
 }
 

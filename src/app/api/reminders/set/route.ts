@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabaseClient } from '@/lib/supabase-server'
+import { queryCache, CACHE_KEYS, CACHE_TTL, invalidateCache } from '@/lib/query-cache'
 
-export const runtime = 'edge'
+// export const runtime = 'edge'
 
 /**
  * POST /api/reminders/set
@@ -39,6 +40,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const startTime = Date.now()
+
     // Check if reminder already exists
     const { data: existing } = await supabase
       .from('event_reminders')
@@ -46,7 +49,7 @@ export async function POST(request: NextRequest) {
       .eq('user_id', userId)
       .eq('event_id', eventId)
       .eq('sent', false)
-      .single()
+      .maybeSingle()
 
     if (existing) {
       // Update existing reminder
@@ -58,7 +61,7 @@ export async function POST(request: NextRequest) {
           subscription_id: subscriptionId
         })
         .eq('id', existing.id)
-        .select()
+        .select('id, user_id, event_id, remind_at, sent, created_at')
         .single()
 
       if (error) {
@@ -69,7 +72,15 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      console.log('✅ Reminder updated:', data.id)
+      const queryTime = Date.now() - startTime
+      if (queryTime > 500) {
+        console.warn(`⚠️ Slow query detected: reminder update took ${queryTime}ms`)
+      }
+
+      // Invalidate user's reminders cache
+      invalidateCache(CACHE_KEYS.USER_REMINDERS(userId))
+
+      console.log(`✅ Reminder updated: ${data.id} (${queryTime}ms)`)
       return NextResponse.json({
         success: true,
         reminderId: data.id,
@@ -88,7 +99,7 @@ export async function POST(request: NextRequest) {
         subscription_id: subscriptionId,
         sent: false
       })
-      .select()
+      .select('id, user_id, event_id, remind_at, sent, created_at')
       .single()
 
     if (error) {
@@ -99,7 +110,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('✅ Reminder created:', data.id)
+    const queryTime = Date.now() - startTime
+    if (queryTime > 500) {
+      console.warn(`⚠️ Slow query detected: reminder insert took ${queryTime}ms`)
+    }
+
+    // Invalidate user's reminders cache
+    invalidateCache(CACHE_KEYS.USER_REMINDERS(userId))
+
+    console.log(`✅ Reminder created: ${data.id} (${queryTime}ms)`)
 
     return NextResponse.json({
       success: true,
@@ -135,6 +154,13 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
+    // Get user_id before deleting for cache invalidation
+    const { data: reminder } = await supabase
+      .from('event_reminders')
+      .select('user_id')
+      .eq('id', reminderId)
+      .single()
+
     const { error } = await supabase
       .from('event_reminders')
       .delete()
@@ -146,6 +172,11 @@ export async function DELETE(request: NextRequest) {
         { success: false, error: error.message },
         { status: 500 }
       )
+    }
+
+    // Invalidate user's reminders cache if we found the user_id
+    if (reminder?.user_id) {
+      invalidateCache(CACHE_KEYS.USER_REMINDERS(reminder.user_id))
     }
 
     console.log('✅ Reminder deleted:', reminderId)
@@ -178,13 +209,28 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Check cache first
+    const cacheKey = CACHE_KEYS.USER_REMINDERS(userId)
+    const cached = queryCache.get<any>(cacheKey)
+
+    if (cached) {
+      return NextResponse.json({
+        success: true,
+        reminders: cached.reminders,
+        cached: true
+      })
+    }
+
+    const startTime = Date.now()
+
     const { data, error } = await supabase
       .from('event_reminders')
-      .select('*')
+      .select('id, user_id, event_id, event_data, remind_at, sent, created_at')
       .eq('user_id', userId)
       .eq('sent', false)
       .gte('remind_at', new Date().toISOString())
       .order('remind_at', { ascending: true })
+      .limit(50)
 
     if (error) {
       console.error('❌ Failed to fetch reminders:', error)
@@ -194,9 +240,21 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    const queryTime = Date.now() - startTime
+    if (queryTime > 500) {
+      console.warn(`⚠️ Slow query detected: reminders GET took ${queryTime}ms`)
+    }
+
+    const response = { reminders: data }
+
+    // Cache the result for 60 seconds
+    queryCache.set(cacheKey, response, CACHE_TTL.USER_REMINDERS)
+
     return NextResponse.json({
       success: true,
-      reminders: data
+      ...response,
+      cached: false,
+      queryTime
     })
 
   } catch (error) {

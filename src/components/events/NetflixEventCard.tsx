@@ -3,9 +3,11 @@
 import { useState, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Play, Pause, Heart, Share, MoreHorizontal, Calendar, MapPin, DollarSign } from 'lucide-react'
+import { Play, Pause, Heart, Share, MoreHorizontal, Calendar, MapPin, DollarSign, Download } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Event, EventHoverInfo } from '@/types'
+import { generateICS } from '@/lib/calendar/export'
+import toast from 'react-hot-toast'
 
 interface NetflixEventCardProps {
   event: Event
@@ -28,14 +30,16 @@ export function NetflixEventCard({
   const [isVideoPlaying, setIsVideoPlaying] = useState(false)
   const [isVideoLoaded, setIsVideoLoaded] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
+  const [showDropdown, setShowDropdown] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
   const hoverTimeoutRef = useRef<NodeJS.Timeout>()
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   const sizeClasses = {
-    small: 'aspect-video w-48 h-28',
-    medium: 'aspect-video w-64 h-36', 
-    large: 'aspect-video w-80 h-45'
+    small: 'aspect-video w-40 sm:w-48 h-24 sm:h-28',
+    medium: 'aspect-video w-48 sm:w-56 md:w-64 h-28 sm:h-32 md:h-36',
+    large: 'aspect-video w-56 sm:w-64 md:w-80 h-32 sm:h-36 md:h-45'
   }
 
   const imageSrc =
@@ -103,12 +107,36 @@ export function NetflixEventCard({
   const handleShare = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    // TODO: Implement share functionality
     navigator.share?.({
       title: event.title,
       text: event.description ?? undefined,
       url: `/events/${event.id}`
     })
+  }
+
+  const handleAddToCalendar = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setShowDropdown(false)
+
+    const result = generateICS(event)
+
+    if (result.success) {
+      toast.success('Event added to calendar!', {
+        duration: 3000,
+        icon: '📅',
+      })
+    } else {
+      toast.error(`Failed to add to calendar: ${result.error}`, {
+        duration: 3000,
+      })
+    }
+  }
+
+  const toggleDropdown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setShowDropdown(!showDropdown)
   }
 
   const formatPrice = () => {
@@ -151,12 +179,24 @@ export function NetflixEventCard({
   }
 
   useEffect(() => {
+    // Close dropdown when clicking outside
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false)
+      }
+    }
+
+    if (showDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
     return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
       if (hoverTimeoutRef.current) {
         clearTimeout(hoverTimeoutRef.current)
       }
     }
-  }, [])
+  }, [showDropdown])
 
   return (
     <div
@@ -182,6 +222,9 @@ export function NetflixEventCard({
               isHovered && "scale-110"
             )}
             sizes={`${size === 'small' ? '192px' : size === 'medium' ? '256px' : '320px'}`}
+            priority={false}
+            loading="lazy"
+            quality={85}
           />
         </div>
 
@@ -209,90 +252,115 @@ export function NetflixEventCard({
         )} />
 
         {/* Content */}
-        <div className="absolute inset-0 flex flex-col justify-end p-4">
+        <div className="absolute inset-0 flex flex-col justify-end p-2 sm:p-3 md:p-4">
           {/* Category Badge */}
-          <div className="absolute top-3 left-3">
-            <span className="bg-black/60 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-full capitalize">
+          <div className="absolute top-2 left-2">
+            <span className="bg-black/60 backdrop-blur-sm text-white text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full capitalize">
               {event.category}
             </span>
           </div>
 
           {/* Video Play Indicator */}
           {event.video_url && (
-            <div className="absolute top-3 right-3">
-              <div className="bg-black/60 backdrop-blur-sm text-white p-1.5 rounded-full">
-                {isVideoPlaying ? <Pause size={12} /> : <Play size={12} />}
+            <div className="absolute top-2 right-2">
+              <div className="bg-black/60 backdrop-blur-sm text-white p-1 sm:p-1.5 rounded-full">
+                {isVideoPlaying ? <Pause size={10} /> : <Play size={10} />}
               </div>
             </div>
           )}
 
           {/* Event Info */}
-          <div className="space-y-1">
-            <h3 className="text-white font-semibold text-sm line-clamp-2">
+          <div className="space-y-0.5 sm:space-y-1">
+            <h3 className="text-white font-semibold text-xs sm:text-sm line-clamp-2">
               {event.title}
             </h3>
-            
-            <div className="flex items-center space-x-3 text-white/80 text-xs">
-              <div className="flex items-center space-x-1">
-                <Calendar size={10} />
+
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-white/80 text-[10px] sm:text-xs">
+              <div className="flex items-center space-x-0.5 sm:space-x-1">
+                <Calendar size={8} className="sm:w-[10px] sm:h-[10px]" />
                 <span>{formatDate()}</span>
               </div>
-              
+
               {event.venue_name && (
-                <div className="flex items-center space-x-1">
-                  <MapPin size={10} />
-                  <span className="truncate max-w-20">{event.venue_name}</span>
+                <div className="flex items-center space-x-0.5 sm:space-x-1">
+                  <MapPin size={8} className="sm:w-[10px] sm:h-[10px]" />
+                  <span className="truncate max-w-16 sm:max-w-20">{event.venue_name}</span>
                 </div>
               )}
-              
-              <div className="flex items-center space-x-1">
-                <DollarSign size={10} />
+
+              <div className="flex items-center space-x-0.5 sm:space-x-1">
+                <DollarSign size={8} className="sm:w-[10px] sm:h-[10px]" />
                 <span>{formatPrice()}</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Hover Actions */}
+        {/* Hover Actions - Hidden on mobile, visible on tablet+ */}
         <div className={cn(
-          "absolute top-3 right-3 flex space-x-1 transition-all duration-300",
+          "hidden sm:flex absolute top-3 right-3 space-x-1 transition-all duration-300",
           isHovered ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
         )}>
           <button
             onClick={toggleSaved}
             className={cn(
-              "p-2 rounded-full backdrop-blur-sm transition-all duration-200",
-              isSaved 
-                ? "bg-red-500/90 text-white" 
+              "p-1.5 sm:p-2 rounded-full backdrop-blur-sm transition-all duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center",
+              isSaved
+                ? "bg-red-500/90 text-white"
                 : "bg-black/60 text-white/80 hover:bg-black/80 hover:text-white"
             )}
+            aria-label={isSaved ? "Remove from favorites" : "Add to favorites"}
           >
             <Heart size={14} className={isSaved ? "fill-current" : ""} />
           </button>
-          
+
           <button
             onClick={handleShare}
-            className="p-2 rounded-full bg-black/60 text-white/80 hover:bg-black/80 hover:text-white backdrop-blur-sm transition-all duration-200"
+            className="p-1.5 sm:p-2 rounded-full bg-black/60 text-white/80 hover:bg-black/80 hover:text-white backdrop-blur-sm transition-all duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center"
+            aria-label="Share event"
           >
             <Share size={14} />
           </button>
-          
-          <button
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              // TODO: Show context menu
-            }}
-            className="p-2 rounded-full bg-black/60 text-white/80 hover:bg-black/80 hover:text-white backdrop-blur-sm transition-all duration-200"
-          >
-            <MoreHorizontal size={14} />
-          </button>
+
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={toggleDropdown}
+              className="p-1.5 sm:p-2 rounded-full bg-black/60 text-white/80 hover:bg-black/80 hover:text-white backdrop-blur-sm transition-all duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center"
+              aria-label="More options"
+            >
+              <MoreHorizontal size={14} />
+            </button>
+
+            {showDropdown && (
+              <div className="absolute right-0 top-full mt-2 w-48 bg-gray-900 rounded-lg shadow-xl border border-white/10 overflow-hidden z-50">
+                <button
+                  onClick={handleAddToCalendar}
+                  className="w-full px-4 py-3 text-left text-sm hover:bg-white/10 transition-colors flex items-center gap-3"
+                >
+                  <Calendar size={16} className="text-purple-400" />
+                  <span>Add to Calendar</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setShowDropdown(false)
+                    // TODO: Add more actions here
+                  }}
+                  className="w-full px-4 py-3 text-left text-sm hover:bg-white/10 transition-colors flex items-center gap-3"
+                >
+                  <Download size={16} className="text-blue-400" />
+                  <span>Download Info</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Popular Indicator */}
         {event.is_featured && (
-          <div className="absolute bottom-3 left-3">
-            <span className="bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs px-2 py-1 rounded-full font-medium">
+          <div className="absolute bottom-2 left-2">
+            <span className="bg-gradient-to-r from-orange-500 to-red-500 text-white text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full font-medium">
               🔥 Popular
             </span>
           </div>
