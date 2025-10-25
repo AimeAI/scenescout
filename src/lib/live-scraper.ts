@@ -30,6 +30,39 @@ export class LiveEventScraper {
     'distillery district': { lat: 43.6503, lng: -79.3599, address: '55 Mill St, Toronto, ON' }
   }
 
+  /**
+   * Fetch accurate date from EventBrite event page meta tags
+   * Used when search results only show partial dates like "Oct 25"
+   */
+  private async fetchEventPageDate(eventUrl: string): Promise<{ date: string, time: string } | null> {
+    try {
+      const response = await axios.get(eventUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+        },
+        timeout: 10000
+      })
+
+      const $ = cheerio.load(response.data)
+
+      // Extract from meta tag: <meta property="event:start_time" content="2026-08-25T09:00:00-04:00">
+      const startTimeMeta = $('meta[property="event:start_time"]').attr('content')
+      if (startTimeMeta) {
+        const eventDate = new Date(startTimeMeta)
+        if (!isNaN(eventDate.getTime())) {
+          const date = eventDate.toISOString().split('T')[0]
+          const time = eventDate.toISOString().split('T')[1].substring(0, 8)
+          return { date, time }
+        }
+      }
+
+      return null
+    } catch (error) {
+      console.warn(`Failed to fetch event page: ${error.message}`)
+      return null
+    }
+  }
+
   async scrapeEventbrite(query: string, limit: number = 50): Promise<ScrapedEvent[]> {
     const events: ScrapedEvent[] = []
     
@@ -58,17 +91,32 @@ export class LiveEventScraper {
           })
 
           const $ = cheerio.load(response.data)
-          
+
+          // First pass: collect all event data from search results
+          const tempEvents: Array<{
+            title: string,
+            description: string,
+            dateText: string,
+            date: string,
+            time: string,
+            venue: string,
+            price: number,
+            priceMax: number,
+            priceRange: string,
+            imageUrl: string,
+            fullUrl: string
+          }> = []
+
           $('article, [data-testid="search-event-card"], .search-event-card, .event-card').each((i, elem) => {
             const $elem = $(elem)
-            
+
             // Extract title
             const title = $elem.find('h3, h2, [data-testid="event-title"], .event-title').first().text().trim()
             if (!title || title.length < 5) return
-            
+
             // Skip if not relevant to query
             if (!this.isRelevantToQuery(title, query)) return
-            
+
             // Extract description first (may contain date information)
             let rawDescription = $elem.find('.event-description, .summary, p').first().text().trim()
 
@@ -116,10 +164,10 @@ export class LiveEventScraper {
             // Extract venue with better parsing
             const venueText = $elem.find('[data-testid="event-location"], .location-info, .venue-name').first().text().trim()
             const venue = this.extractVenueName(venueText)
-            
+
             // Extract price with comprehensive search
             let priceText = ''
-            
+
             // Look for price in multiple places
             const priceSelectors = [
               '[data-testid="event-price"]',
@@ -127,7 +175,7 @@ export class LiveEventScraper {
               '[class*="price"]', '[class*="cost"]', '[class*="ticket"]',
               '.event-price', '.pricing', '.admission'
             ]
-            
+
             for (const selector of priceSelectors) {
               const element = $elem.find(selector).first()
               if (element.length && element.text().trim()) {
@@ -135,7 +183,7 @@ export class LiveEventScraper {
                 break
               }
             }
-            
+
             // Also check in the description for price info (ONLY dollar amounts - no text parsing)
             if (!priceText && description) {
               const descPriceMatch = description.match(/\$\d+/)
@@ -143,46 +191,85 @@ export class LiveEventScraper {
                 priceText = descPriceMatch[0]
               }
             }
-            
+
             const { price, priceMax, priceRange } = this.parsePrice(priceText)
-            
+
             console.log(`💰 "${title.substring(0, 40)}": "${priceText}" -> ${priceRange}`)
-            
+
             // Extract image
             const imageElement = $elem.find('img').first()
             const imageUrl = imageElement.attr('src') || imageElement.attr('data-src') || ''
-            
+
             // Extract link
             const linkElement = $elem.find('a').first()
             const link = linkElement.attr('href') || ''
-            
+            const fullUrl = link?.startsWith('http') ? link : `https://www.eventbrite.ca${link}`
+
+            tempEvents.push({
+              title,
+              description,
+              dateText,
+              date,
+              time,
+              venue,
+              price,
+              priceMax,
+              priceRange,
+              imageUrl: imageUrl?.startsWith('http') ? imageUrl : '',
+              fullUrl
+            })
+          })
+
+          // Second pass: fetch accurate dates for events without years OR without dates
+          for (const tempEvent of tempEvents) {
+            let finalDate = tempEvent.date
+            let finalTime = tempEvent.time
+
+            // Fetch event page for accurate date if:
+            // 1. Date doesn't have a year (just "Oct 25"), OR
+            // 2. No date found in search results (dateText is empty)
+            const needsEventPageFetch = (!tempEvent.dateText || !tempEvent.dateText.match(/\d{4}/)) && tempEvent.fullUrl
+
+            if (needsEventPageFetch) {
+              try {
+                const accurateDateTime = await this.fetchEventPageDate(tempEvent.fullUrl)
+                if (accurateDateTime) {
+                  finalDate = accurateDateTime.date
+                  finalTime = accurateDateTime.time
+                  console.log(`✅ Fetched accurate date for "${tempEvent.title.substring(0, 30)}": ${finalDate} ${finalTime}`)
+                }
+              } catch (e) {
+                console.warn(`⚠️ Could not fetch event page date for ${tempEvent.title.substring(0, 30)}`)
+              }
+            }
+
             // Get venue coordinates
-            const venueInfo = this.getVenueInfo(venue)
+            const venueInfo = this.getVenueInfo(tempEvent.venue)
 
             // Only add future events (skip past events)
-            const eventDate = new Date(date)
+            const eventDate = new Date(finalDate)
             const now = new Date()
             now.setHours(0, 0, 0, 0) // Start of today
 
             if (eventDate >= now || isNaN(eventDate.getTime())) {
               events.push({
-                title: title.substring(0, 255),
-                description: description || `${title} - Event in Toronto`,
-                date,
-                time,
-                venue_name: venue,
+                title: tempEvent.title.substring(0, 255),
+                description: tempEvent.description,
+                date: finalDate,
+                time: finalTime,
+                venue_name: tempEvent.venue,
                 address: venueInfo.address,
-                price_min: price,
-                price_max: priceMax,
-                price_range: priceRange,
-                external_url: link?.startsWith('http') ? link : `https://www.eventbrite.ca${link}`,
-                category: this.categorizeEvent(title + ' ' + description),
-                image_url: imageUrl?.startsWith('http') ? imageUrl : '',
+                price_min: tempEvent.price,
+                price_max: tempEvent.priceMax,
+                price_range: tempEvent.priceRange,
+                external_url: tempEvent.fullUrl,
+                category: this.categorizeEvent(tempEvent.title + ' ' + tempEvent.description),
+                image_url: tempEvent.imageUrl,
                 latitude: venueInfo.lat,
                 longitude: venueInfo.lng
               })
             }
-          })
+          }
         } catch (pageError) {
           if (pageError.response) {
             console.warn(`⚠️ Eventbrite page ${page} returned ${pageError.response.status}: ${pageError.response.statusText}`)

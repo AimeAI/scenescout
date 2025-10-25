@@ -60,67 +60,30 @@ export async function GET(request: NextRequest) {
       console.warn('⚠️ Ticketmaster API error:', error)
     }
 
-    // Try EventBrite (secondary source) using official API
+    // Try EventBrite (secondary source) using live scraper with improved date detection
     try {
-      const { EventbriteClient } = await import('@/lib/api/eventbrite-client')
-      const ebClient = new EventbriteClient({
-        apiKey: process.env.EVENTBRITE_PRIVATE_TOKEN || process.env.EVENTBRITE_TOKEN || '',
-        baseUrl: 'https://www.eventbriteapi.com/v3'
-      })
-
-      const searchParams: any = {
-        query,
-        limit: Math.min(limit, 50),
-        sort: 'date'
-      }
-
-      // Add location if available
-      if (lat && lng) {
-        searchParams.location = {
-          latitude: lat,
-          longitude: lng,
-          radius: 25 // 25km radius
+      const ebResponse = await fetch(`${request.nextUrl.origin}/api/search-live?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 100)}`)
+      if (ebResponse.ok) {
+        const ebData = await ebResponse.json()
+        if (ebData.success && ebData.events?.length > 0) {
+          // Convert scraped events to standard format
+          const convertedEvents = ebData.events.map((event: any) => ({
+            ...event,
+            id: `live_${event.title.replace(/[^\w]/g, '_').toLowerCase()}`,
+            event_date: event.date,
+            start_time: event.time,
+            source: 'eventbrite',
+            provider: 'EventBrite',
+            verified: false // Scraped data, not from official API
+          }))
+          allEvents.push(...convertedEvents)
+          console.log(`✅ EventBrite (scraper): ${convertedEvents.length} events`)
         }
       } else {
-        // Default to Toronto
-        searchParams.location = {
-          city: 'Toronto'
-        }
-      }
-
-      const ebResult = await ebClient.searchEvents(searchParams)
-
-      if (ebResult.success && ebResult.data?.length > 0) {
-        // Convert EventBrite API response to our format
-        const convertedEvents = ebResult.data.map((event: any) => ({
-          id: `eb_${event.id}`,
-          title: event.name?.text || event.name,
-          description: event.description?.text || event.description || '',
-          event_date: event.start?.local?.split('T')[0] || event.start?.utc?.split('T')[0],
-          date: event.start?.local || event.start?.utc,
-          start_time: event.start?.local?.split('T')[1] || '19:00:00',
-          time: event.start?.local?.split('T')[1] || '19:00:00',
-          venue_name: event.venue?.name || event.venue?.address?.city || 'Toronto',
-          address: event.venue?.address ? `${event.venue.address.address_1 || ''}, ${event.venue.address.city || 'Toronto'}`.trim() : 'Toronto, ON',
-          latitude: event.venue?.latitude ? parseFloat(event.venue.latitude) : lat,
-          longitude: event.venue?.longitude ? parseFloat(event.venue.longitude) : lng,
-          lat: event.venue?.latitude ? parseFloat(event.venue.latitude) : lat,
-          lng: event.venue?.longitude ? parseFloat(event.venue.longitude) : lng,
-          price_min: event.ticket_classes?.[0]?.cost?.value ? parseFloat(event.ticket_classes[0].cost.value) / 100 : 0,
-          price: event.is_free ? 0 : (event.ticket_classes?.[0]?.cost?.value ? parseFloat(event.ticket_classes[0].cost.value) / 100 : undefined),
-          price_label: event.is_free ? 'Free' : (event.ticket_classes?.[0]?.cost?.display || 'Paid'),
-          url: event.url,
-          image: event.logo?.url || event.logo?.original?.url || '',
-          source: 'eventbrite',
-          provider: 'EventBrite',
-          official: true,
-          verified: true
-        }))
-        allEvents.push(...convertedEvents)
-        console.log(`✅ EventBrite (API): ${convertedEvents.length} events`)
+        console.warn(`⚠️ EventBrite scraper returned ${ebResponse.status}`)
       }
     } catch (error) {
-      console.warn('⚠️ EventBrite API error:', error)
+      console.warn('⚠️ EventBrite scraper error:', error)
     }
     
     // Filter out past events - only show events from today onwards (comparing dates only, not times)

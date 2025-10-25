@@ -76,7 +76,7 @@ export class EventbriteClient extends BaseApiClient {
       searchParams['price'] = params.priceRange.min === 0 ? 'free' : 'paid'
     }
 
-    const url = this.buildUrl('/events/search/', searchParams)
+    const url = this.buildUrl('/events/search', searchParams)
     
     return this.makeRetryableRequest(async () => {
       const response = await this.makeRequest<{
