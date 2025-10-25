@@ -404,7 +404,19 @@ export class LiveEventScraper {
             if (ampm?.toLowerCase() === 'am' && hour24 === 12) hour24 = 0
 
             time = `${hour24.toString().padStart(2, '0')}:${minute}:00`
-            date = new Date(`${month} ${day}, ${new Date().getFullYear()}`)
+
+            // Smart year detection: if month/day has passed this year, use next year
+            const currentYear = new Date().getFullYear()
+            const testDate = new Date(`${month} ${day}, ${currentYear}`)
+            const now = new Date()
+            now.setHours(0, 0, 0, 0)
+
+            // If the date is more than 30 days in the past, assume it's next year
+            if (testDate.getTime() < now.getTime() - (30 * 24 * 60 * 60 * 1000)) {
+              date = new Date(`${month} ${day}, ${currentYear + 1}`)
+            } else {
+              date = testDate
+            }
           }
           // Handle other formats with am/pm
           else if (pattern.source.includes('am|pm')) {

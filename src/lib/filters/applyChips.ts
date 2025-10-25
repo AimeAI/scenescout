@@ -8,13 +8,50 @@ export function applyChipFilters(events: any[], chip: { tonight?: boolean; now?:
   }
 
   if (chip.now) {
-    list = list.filter(e => isWithinHours(e.startUtc || e.start_date, e.tz || opts.tz, 3))
-  } else if (chip.tonight) {
-    const start = new Date(opts.todayStartIsoUtc).getTime()
-    const end = new Date(opts.todayEndIsoUtc).getTime()
+    // Show events starting within next 3 hours
+    const nowTime = Date.now()
+    const threeHoursLater = nowTime + (3 * 60 * 60 * 1000)
+
     list = list.filter(e => {
-      const t = new Date(e.startUtc || e.start_date).getTime()
-      return t >= start && t <= end
+      // Support multiple date field formats from different APIs
+      const dateStr = e.event_date || e.date || e.startUtc || e.start_date
+      if (!dateStr) return false
+
+      const eventTime = new Date(dateStr).getTime()
+      return eventTime >= nowTime && eventTime <= threeHoursLater
+    })
+  } else if (chip.tonight) {
+    // Show events happening tonight (6 PM today - 4 AM tomorrow)
+    const now = new Date()
+    const tonightStart = new Date(now)
+    tonightStart.setHours(18, 0, 0, 0) // 6 PM today
+
+    const tonightEnd = new Date(now)
+    tonightEnd.setDate(tonightEnd.getDate() + 1)
+    tonightEnd.setHours(4, 0, 0, 0) // 4 AM tomorrow
+
+    // If it's before 6 PM, show tonight's events
+    // If it's after midnight, show events from previous evening that are still ongoing
+    if (now.getHours() < 6) {
+      // It's early morning (12 AM - 6 AM), show events from yesterday evening
+      tonightStart.setDate(tonightStart.getDate() - 1)
+      tonightEnd.setHours(6, 0, 0, 0) // Until 6 AM today
+    }
+
+    list = list.filter(e => {
+      // Support multiple date field formats from different APIs
+      const dateStr = e.event_date || e.date || e.startUtc || e.start_date
+      if (!dateStr) return false
+
+      const eventDate = new Date(dateStr)
+      const eventStart = eventDate.getTime()
+
+      // Default 4 hour duration if no end time specified
+      const endStr = e.end_date || e.endUtc
+      const eventEnd = endStr ? new Date(endStr).getTime() : eventStart + (4 * 60 * 60 * 1000)
+
+      // Event is happening tonight if it starts before tonight ends AND ends after tonight starts
+      return eventStart <= tonightEnd.getTime() && eventEnd >= tonightStart.getTime()
     })
   }
 
