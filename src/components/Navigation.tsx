@@ -180,6 +180,19 @@ export default function Navigation() {
                     </NavigationMenuLink>
                   </Link>
                 </NavigationMenuItem>
+
+                {/* Settings */}
+                <NavigationMenuItem>
+                  <Link href="/settings" legacyBehavior passHref>
+                    <NavigationMenuLink className={cn(
+                      'group inline-flex h-10 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50',
+                      isActive('/settings') && 'bg-accent/50'
+                    )}>
+                      <Settings className="w-4 h-4 mr-1" />
+                      Settings
+                    </NavigationMenuLink>
+                  </Link>
+                </NavigationMenuItem>
               </NavigationMenuList>
             </NavigationMenu>
           </div>
@@ -236,6 +249,18 @@ export default function Navigation() {
                       <Link href="/account">
                         <User className="mr-2 h-4 w-4" />
                         Account
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/preferences">
+                        <User className="mr-2 h-4 w-4" />
+                        Preferences
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/settings">
+                        <Settings className="mr-2 h-4 w-4" />
+                        Discovery Settings
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
@@ -322,6 +347,16 @@ export default function Navigation() {
                 )}
               </Link>
 
+              {/* Settings */}
+              <Link
+                href="/settings"
+                className="flex items-center px-3 py-3 rounded-md text-base font-medium hover:bg-accent min-h-[44px]"
+                onClick={() => setIsOpen(false)}
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Settings
+              </Link>
+
               {/* Cities submenu */}
               <div className="px-3 py-2">
                 <div className="text-sm font-medium text-muted-foreground mb-2">Cities</div>
@@ -338,6 +373,24 @@ export default function Navigation() {
                   ))}
                 </div>
               </div>
+
+              <Link
+                href="/preferences"
+                className="flex items-center px-3 py-3 rounded-md text-base font-medium hover:bg-accent min-h-[44px]"
+                onClick={() => setIsOpen(false)}
+              >
+                <User className="w-4 h-4 mr-2" />
+                Preferences
+              </Link>
+
+              <Link
+                href="/settings"
+                className="flex items-center px-3 py-3 rounded-md text-base font-medium hover:bg-accent min-h-[44px]"
+                onClick={() => setIsOpen(false)}
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Discovery Settings
+              </Link>
 
               <Link
                 href="/submit"

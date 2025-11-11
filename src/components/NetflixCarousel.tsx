@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toggleSaved, isSaved } from '@/lib/saved/store'
 import { trackEvent, isTrackingEnabled } from '@/lib/tracking/client'
+import { Thumbs } from '@/components/events/Thumbs'
 
 interface Event {
   id: string
@@ -286,11 +287,9 @@ export function NetflixCarousel({ events, onEventClick, onLoadMore, hasMore, loa
                         {event.description}
                       </p>
 
-                      {/* Action Indicator */}
+                      {/* Thumbs and Action Indicator */}
                       <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-500">
-                          Click to view
-                        </span>
+                        <Thumbs event={event} />
                         <div className="text-blue-400 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
                           View Event →
                         </div>

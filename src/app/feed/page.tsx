@@ -3,53 +3,124 @@
 import { useState, useEffect } from 'react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { NetflixCarousel } from '@/components/NetflixCarousel'
+import { getHiddenEventIds } from '@/lib/thumbs'
 
 export default function DiscoverPage() {
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
+  const [hiddenEvents, setHiddenEvents] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     loadTrendingEvents()
+
+    // Listen for preferences updates
+    const handlePreferencesUpdate = () => {
+      console.log('🔄 Preferences updated, reloading events...')
+      loadTrendingEvents()
+    }
+
+    // Reload when page becomes visible (user navigates back from settings)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('🔄 Page visible, checking for updates...')
+        loadTrendingEvents()
+      }
+    }
+
+    window.addEventListener('preferencesUpdated', handlePreferencesUpdate)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener('preferencesUpdated', handlePreferencesUpdate)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [])
+
+  // Listen for thumbs down events to update hidden events in real-time
+  useEffect(() => {
+    const handleEventHidden = () => {
+      const hidden = getHiddenEventIds()
+      setHiddenEvents(hidden)
+
+      // Filter out hidden events from current list
+      setEvents(prevEvents => {
+        const filtered = prevEvents.filter(event => !hidden.has(event.id))
+        console.log(`🗑️ Filtered out hidden events. Before: ${prevEvents.length}, After: ${filtered.length}`)
+        return filtered
+      })
+    }
+
+    window.addEventListener('eventHidden', handleEventHidden)
+    return () => window.removeEventListener('eventHidden', handleEventHidden)
   }, [])
 
   const loadTrendingEvents = async () => {
     try {
-      // Search for multiple trending topics
-      const trendingQueries = [
-        'concerts tonight',
-        'halloween parties',
-        'food festivals',
-        'tech events',
-        'art exhibitions'
-      ]
+      // Get user location
+      let userLocation = { lat: 43.6532, lng: -79.3832 } // Default to Toronto
 
-      const allEvents = []
-      
-      for (const query of trendingQueries) {
+      if (navigator.geolocation) {
         try {
-          const response = await fetch(`/api/search-live?q=${encodeURIComponent(query)}`)
-          const data = await response.json()
-          
-          if (data.success && data.events) {
-            // Take top 5 events from each category
-            allEvents.push(...data.events.slice(0, 5))
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 })
+          })
+          userLocation = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
           }
         } catch (error) {
-          console.error(`Failed to load ${query}:`, error)
+          console.log('Using default location (Toronto)')
+        }
+      }
+
+      // Get user's customized search categories from preferences
+      const { getEnabledSearchCategories, getUserPreferences } = await import('@/lib/user-preferences')
+      const enabledCategories = getEnabledSearchCategories()
+      const userPrefs = getUserPreferences()
+
+      console.log(`🎯 Using ${enabledCategories.length} enabled categories from user preferences`)
+      console.log('📋 Categories:', enabledCategories.map(c => `${c.name} (${c.query})`).join(', '))
+
+      const allEvents = []
+
+      // Use user's custom categories and queries
+      for (const category of enabledCategories) {
+        try {
+          const limit = category.eventsPerCategory || 5
+          const response = await fetch(`/api/search-live?q=${encodeURIComponent(category.query)}&limit=${limit * 2}`)
+          const data = await response.json()
+
+          if (data.success && data.events) {
+            console.log(`✅ ${category.name} (${category.query}): ${data.events.length} events`)
+            allEvents.push(...data.events.slice(0, limit))
+          }
+        } catch (error) {
+          console.error(`❌ ${category.name} failed:`, error)
         }
       }
 
       // Remove duplicates and sort by popularity/price
       const uniqueEvents = removeDuplicates(allEvents)
-      const trendingEvents = uniqueEvents
+
+      // Get current hidden events (fresh read)
+      const currentlyHidden = getHiddenEventIds()
+      setHiddenEvents(currentlyHidden)
+
+      // Filter out hidden events (thumbs down)
+      const visibleEvents = uniqueEvents.filter(event => !currentlyHidden.has(event.id))
+
+      const trendingEvents = visibleEvents
         .sort((a, b) => {
           // Prioritize paid events and known venues
           const aScore = (a.price_min > 0 ? 10 : 0) + (isKnownVenue(a.venue_name) ? 5 : 0)
           const bScore = (b.price_min > 0 ? 10 : 0) + (isKnownVenue(b.venue_name) ? 5 : 0)
           return bScore - aScore
         })
-        .slice(0, 20) // Top 20 trending events
+        .slice(0, userPrefs.totalEventsLimit) // Use user's total limit
 
+      console.log(`✅ Loaded ${trendingEvents.length} events from ${allEvents.length} total (${currentlyHidden.size} hidden)`)
+      console.log(`   📊 Source: Live scraper with ${enabledCategories.length} custom categories`)
+      console.log(`   ⚙️ User limit: ${userPrefs.totalEventsLimit} events`)
       setEvents(trendingEvents)
     } catch (error) {
       console.error('Failed to load trending events:', error)
@@ -79,9 +150,13 @@ export default function DiscoverPage() {
   }
 
   const handleEventClick = (event) => {
-    if (event.external_url) {
-      window.open(event.external_url, '_blank')
+    // Cache event data in sessionStorage for detail page
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(`event_${event.id}`, JSON.stringify(event))
     }
+
+    // Navigate to internal event detail page
+    window.location.href = `/events/${event.id}`
   }
 
   return (

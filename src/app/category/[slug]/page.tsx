@@ -9,6 +9,7 @@ import { EmptyState, getEmptyState } from '@/components/empty-states'
 import { isSaved, toggleSaved } from '@/lib/saved/store'
 import { trackEvent, isTrackingEnabled } from '@/lib/tracking/client'
 import { motion } from 'framer-motion'
+import { getUserPreferences } from '@/lib/user-preferences'
 
 // Category mapping - must match the IDs from the homepage CATEGORIES array
 const CATEGORY_MAP: Record<string, { title: string; emoji: string; query: string }> = {
@@ -45,7 +46,22 @@ export default function CategoryPage() {
   const params = useParams()
   const router = useRouter()
   const slug = params.slug as string
-  const category = CATEGORY_MAP[slug]
+
+  // Try to get category from hardcoded map first, then check user preferences
+  let category = CATEGORY_MAP[slug]
+
+  // If not in hardcoded map, check if it's a custom category from user preferences
+  if (!category && typeof window !== 'undefined') {
+    const userPrefs = getUserPreferences()
+    const customCategory = userPrefs.searchCategories.find(cat => cat.id === slug)
+    if (customCategory) {
+      category = {
+        title: customCategory.name,
+        emoji: customCategory.name.split(' ')[0] || '🎯',
+        query: customCategory.query
+      }
+    }
+  }
 
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [allEvents, setAllEvents] = useState<any[]>([])

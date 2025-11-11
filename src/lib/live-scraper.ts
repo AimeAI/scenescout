@@ -40,7 +40,7 @@ export class LiveEventScraper {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
         },
-        timeout: 10000
+        timeout: 5000 // 5 second timeout for faster responses
       })
 
       const $ = cheerio.load(response.data)
@@ -205,6 +205,24 @@ export class LiveEventScraper {
             const link = linkElement.attr('href') || ''
             const fullUrl = link?.startsWith('http') ? link : `https://www.eventbrite.ca${link}`
 
+            // CRITICAL: Skip category/listing pages - only include actual event URLs
+            // EventBrite event URLs must contain '/e/' followed by event name and ID
+            // Examples:
+            //   ✅ https://www.eventbrite.ca/e/halloween-party-tickets-123456
+            //   ❌ https://www.eventbrite.ca/d/canada--toronto/halloween-party/
+
+            // Skip any URL containing '/d/' - these are directory/category pages
+            if (fullUrl.includes('/d/')) {
+              console.log(`⏭️  Skipping directory page: ${fullUrl}`)
+              return
+            }
+
+            // Event URLs must contain '/e/' (event identifier)
+            if (!fullUrl.includes('/e/')) {
+              console.log(`⏭️  Skipping non-event URL (no /e/): ${fullUrl}`)
+              return
+            }
+
             tempEvents.push({
               title,
               description,
@@ -220,34 +238,36 @@ export class LiveEventScraper {
             })
           })
 
-          // Second pass: fetch accurate dates for events without years OR without dates
-          for (const tempEvent of tempEvents) {
-            let finalDate = tempEvent.date
-            let finalTime = tempEvent.time
+          // Second pass: fetch accurate dates in parallel (max 5 at a time for performance)
+          const eventsNeedingFetch = tempEvents.filter(e =>
+            (!e.dateText || !e.dateText.match(/\d{4}/)) && e.fullUrl
+          )
 
-            // Fetch event page for accurate date if:
-            // 1. Date doesn't have a year (just "Oct 25"), OR
-            // 2. No date found in search results (dateText is empty)
-            const needsEventPageFetch = (!tempEvent.dateText || !tempEvent.dateText.match(/\d{4}/)) && tempEvent.fullUrl
-
-            if (needsEventPageFetch) {
+          // Fetch in batches of 5 to avoid overwhelming EventBrite
+          const batchSize = 5
+          for (let i = 0; i < eventsNeedingFetch.length; i += batchSize) {
+            const batch = eventsNeedingFetch.slice(i, i + batchSize)
+            await Promise.all(batch.map(async (tempEvent) => {
               try {
                 const accurateDateTime = await this.fetchEventPageDate(tempEvent.fullUrl)
                 if (accurateDateTime) {
-                  finalDate = accurateDateTime.date
-                  finalTime = accurateDateTime.time
-                  console.log(`✅ Fetched accurate date for "${tempEvent.title.substring(0, 30)}": ${finalDate} ${finalTime}`)
+                  tempEvent.date = accurateDateTime.date
+                  tempEvent.time = accurateDateTime.time
+                  console.log(`✅ Fetched accurate date for "${tempEvent.title.substring(0, 30)}": ${tempEvent.date} ${tempEvent.time}`)
                 }
               } catch (e) {
-                console.warn(`⚠️ Could not fetch event page date for ${tempEvent.title.substring(0, 30)}`)
+                // Silently fail and use the best guess date
               }
-            }
+            }))
+          }
 
+          // Third pass: build final events with corrected dates
+          for (const tempEvent of tempEvents) {
             // Get venue coordinates
             const venueInfo = this.getVenueInfo(tempEvent.venue)
 
             // Only add future events (skip past events)
-            const eventDate = new Date(finalDate)
+            const eventDate = new Date(tempEvent.date)
             const now = new Date()
             now.setHours(0, 0, 0, 0) // Start of today
 
@@ -255,8 +275,8 @@ export class LiveEventScraper {
               events.push({
                 title: tempEvent.title.substring(0, 255),
                 description: tempEvent.description,
-                date: finalDate,
-                time: finalTime,
+                date: tempEvent.date,
+                time: tempEvent.time,
                 venue_name: tempEvent.venue,
                 address: venueInfo.address,
                 price_min: tempEvent.price,
@@ -683,11 +703,29 @@ export class LiveEventScraper {
 
   async scrapeAll(query: string, limit: number = 50): Promise<ScrapedEvent[]> {
     console.log(`🔍 Live scraping for: "${query}" (limit: ${limit})`)
-    
+
+    // Scrape from EventBrite
     const eventbriteEvents = await this.scrapeEventbrite(query, limit)
-    const uniqueEvents = this.removeDuplicates(eventbriteEvents)
-    
-    console.log(`✅ Found ${uniqueEvents.length} unique relevant events`)
+    console.log(`   📊 EventBrite: ${eventbriteEvents.length} events`)
+
+    // Also fetch from Ticketmaster API for verified events
+    let ticketmasterEvents: ScrapedEvent[] = []
+    try {
+      const tmResponse = await fetch(`http://localhost:3000/api/ticketmaster/search?q=${encodeURIComponent(query)}&limit=20`)
+      const tmData = await tmResponse.json()
+      if (tmData.success && tmData.events) {
+        ticketmasterEvents = tmData.events
+        console.log(`   🎫 Ticketmaster: ${ticketmasterEvents.length} events`)
+      }
+    } catch (error) {
+      console.warn(`   ⚠️  Ticketmaster API unavailable for "${query}"`)
+    }
+
+    // Combine and deduplicate
+    const allEvents = [...eventbriteEvents, ...ticketmasterEvents]
+    const uniqueEvents = this.removeDuplicates(allEvents)
+
+    console.log(`✅ Found ${uniqueEvents.length} unique relevant events (EventBrite + Ticketmaster)`)
     return uniqueEvents
   }
 

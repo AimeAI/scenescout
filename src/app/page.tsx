@@ -14,6 +14,7 @@ import { applyChipFilters } from '@/lib/filters/applyChips'
 import { Thumbs } from '@/components/events/Thumbs'
 import { toggleSaved, isSaved } from '@/lib/saved/store'
 import { CategoryRail } from '@/components/events/CategoryRail'
+import { getHiddenEventIds } from '@/lib/thumbs'
 import { clearAllEventCache } from '@/lib/events/clearCache'
 import { motion, AnimatePresence } from 'framer-motion'
 import { generateDynamicCategories, mergeCategoriesWithDynamic } from '@/lib/personalization/dynamicCategories'
@@ -26,7 +27,11 @@ import { HappeningNowBanner } from '@/components/spontaneity/HappeningNowBanner'
 
 // Enhanced categories with better naming and coverage
 // Using simple keywords that work with both Ticketmaster and EventBrite
-const CATEGORIES = [
+// NOTE: These are DEFAULT categories. Users can customize via /settings
+// Import user preferences to allow customization
+import { getUserPreferences, getEnabledSearchCategories } from '@/lib/user-preferences'
+
+const DEFAULT_CATEGORIES = [
   // Music & Entertainment
   { id: 'music-concerts', title: 'Music & Concerts', emoji: '🎵', query: 'concert' },
   { id: 'nightlife-dj', title: 'Nightlife & DJ Sets', emoji: '🌃', query: 'dance' },
@@ -56,6 +61,27 @@ const CATEGORIES = [
   { id: 'halloween', title: 'Halloween Events', emoji: '🎃', query: 'halloween' }
 ]
 
+// Get categories from user preferences (allows customization from /settings)
+function getCategories() {
+  if (typeof window === 'undefined') return DEFAULT_CATEGORIES
+
+  try {
+    const userPrefs = getUserPreferences()
+    const enabledCategories = getEnabledSearchCategories()
+
+    // Convert user preference format to homepage format
+    return enabledCategories.map(cat => ({
+      id: cat.id,
+      title: cat.name,
+      emoji: cat.name.split(' ')[0] || '🎯', // Extract emoji from name
+      query: cat.query
+    }))
+  } catch (error) {
+    console.warn('Failed to load user preferences, using defaults:', error)
+    return DEFAULT_CATEGORIES
+  }
+}
+
 export default function HomePage() {
   const [categoryEvents, setCategoryEvents] = useState<Record<string, any[]>>({})
   const [loading, setLoading] = useState(true)
@@ -71,6 +97,8 @@ export default function HomePage() {
   const [modalEvent, setModalEvent] = useState<any>(null)
   const [visibleCategoryCount, setVisibleCategoryCount] = useState(8) // Start with 8 categories
   const [isLoadingMoreCategories, setIsLoadingMoreCategories] = useState(false)
+  const [hiddenEvents, setHiddenEvents] = useState<Set<string>>(new Set())
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES) // Use dynamic categories
   const router = useRouter()
 
   // Create refs for scroll containers - one per category
@@ -80,6 +108,38 @@ export default function HomePage() {
   // Set mounted state to prevent hydration mismatch
   useEffect(() => {
     setIsMounted(true)
+  }, [])
+
+  // Load categories from user preferences
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const loadedCategories = getCategories()
+      setCategories(loadedCategories)
+      console.log('📋 Loaded categories from preferences:', loadedCategories.map(c => c.title).join(', '))
+
+      // Listen for preference updates from settings page
+      const handlePreferencesUpdate = async () => {
+        console.log('🔄 Preferences updated, reloading categories and events...')
+        const updatedCategories = getCategories()
+        setCategories(updatedCategories)
+
+        // Clear existing events
+        setCategoryEvents({})
+
+        // Reload events for all categories (including new ones)
+        setLoading(true)
+        const promises = updatedCategories.map(category => {
+          console.log(`📂 Reloading category: ${category.title}`)
+          return loadEvents(category.id, category.query)
+        })
+        await Promise.all(promises)
+        setLoading(false)
+        console.log('✅ All categories reloaded!')
+      }
+
+      window.addEventListener('preferencesUpdated', handlePreferencesUpdate)
+      return () => window.removeEventListener('preferencesUpdated', handlePreferencesUpdate)
+    }
   }, [])
 
   // Get user location
@@ -150,7 +210,7 @@ export default function HomePage() {
       console.log('🚀 Starting to load all categories...')
 
       // Load categories in parallel (much faster)
-      const promises = CATEGORIES.map(category => {
+      const promises = categories.map(category => {
         console.log(`📂 Loading category: ${category.title}`)
         return loadEvents(category.id, category.query)
       })
@@ -188,7 +248,7 @@ export default function HomePage() {
       })
 
       // Show toast feedback with icon
-      const categoryName = CATEGORIES.find(c => c.id === event?.category)?.title || event?.category
+      const categoryName = categories.find(c => c.id === event?.category)?.title || event?.category
       if (categoryName) {
         toast.success(`✨ Learning you like ${categoryName}...`, {
           duration: 2000,
@@ -295,13 +355,19 @@ export default function HomePage() {
     }
   }, [])
 
-  // Load saved events from localStorage
+  // Load saved events and hidden events from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('savedEvents')
     if (saved) {
       setSavedEvents(new Set(JSON.parse(saved)))
     }
-  }, [])
+
+    // Load hidden events on mount
+    if (isMounted) {
+      const hidden = getHiddenEventIds()
+      setHiddenEvents(hidden)
+    }
+  }, [isMounted])
 
   // Filter events by search query (keep for backward compat with existing search input)
   const filterEventsBySearch = (events: any[]) => {
@@ -313,9 +379,13 @@ export default function HomePage() {
     )
   }
 
-  // Combined filtering
+  // Combined filtering (includes hidden events filter)
   const applyFilters = (events: any[]) => {
     let filtered = events
+
+    // Filter out hidden events (thumbs down)
+    filtered = filtered.filter(event => !hiddenEvents.has(event.id))
+
     filtered = filterEventsBySearch(filtered)
     filtered = filterEventsByChip(filtered)
     return filtered
@@ -350,6 +420,15 @@ export default function HomePage() {
     window.addEventListener('savedEventsChanged', handleInteractionChange)
     window.addEventListener('interactionTracked', handleInteractionChange)
 
+    // Listen for thumbs down events to update hidden events in real-time
+    const handleThumbsDown = () => {
+      const hidden = getHiddenEventIds()
+      setHiddenEvents(hidden)
+      console.log('👎 Event hidden, updating visible events...', { hiddenCount: hidden.size })
+    }
+
+    window.addEventListener('eventHidden', handleThumbsDown)
+
     // Also poll as fallback for changes from other tabs
     const interval = setInterval(() => {
       const interactions = readInteractions()
@@ -361,6 +440,7 @@ export default function HomePage() {
     return () => {
       window.removeEventListener('savedEventsChanged', handleInteractionChange)
       window.removeEventListener('interactionTracked', handleInteractionChange)
+      window.removeEventListener('eventHidden', handleThumbsDown)
       clearInterval(interval)
     }
   }, [isMounted, interactionTrigger])
@@ -369,17 +449,17 @@ export default function HomePage() {
   // With DYNAMIC CATEGORY GENERATION for unique personalized experience
   const displayCategories = useMemo(() => {
     if (!isMounted || !isTrackingEnabled()) {
-      return CATEGORIES
+      return categories
     }
 
     const interactions = readInteractions()
-    if (interactions.length === 0) return CATEGORIES
+    if (interactions.length === 0) return categories
 
     const affinity = computeAffinity(interactions)
 
     // Store affinity scores for debug display
     const categoryAffinity: Record<string, number> = {}
-    CATEGORIES.forEach(cat => {
+    categories.forEach(cat => {
       categoryAffinity[cat.id] = affinity.categories[cat.id] || 0
     })
     setAffinityScores(categoryAffinity)
@@ -394,7 +474,7 @@ export default function HomePage() {
     })
 
     // Generate dynamic categories based on user behavior
-    const dynamicCategories = generateDynamicCategories(interactions, affinity, CATEGORIES)
+    const dynamicCategories = generateDynamicCategories(interactions, affinity, categories)
 
     if (dynamicCategories.length > 0) {
       console.log('✨ Generated Dynamic Categories:', dynamicCategories.map(c => ({
@@ -405,7 +485,7 @@ export default function HomePage() {
     }
 
     // Merge dynamic + static categories, sorted by relevance
-    const merged = mergeCategoriesWithDynamic(CATEGORIES, dynamicCategories, affinity)
+    const merged = mergeCategoriesWithDynamic(categories, dynamicCategories, affinity)
 
     console.log('📊 Category Order After Merge:', merged.slice(0, 5).map(c => ({
       title: c.title,
@@ -415,21 +495,21 @@ export default function HomePage() {
 
     // Use dynamic category manager if enabled (for hiding inactive categories)
     if (isDynamicCategoriesEnabled()) {
-      const dynamicRails = manageDynamicRails(CATEGORIES, affinity, categoryEvents, interactions)
+      const dynamicRails = manageDynamicRails(categories, affinity, categoryEvents, interactions)
 
       // Convert DynamicRail[] back to Category[] format
       return dynamicRails.map(rail => ({
         id: rail.categoryId,
         title: rail.title,
         emoji: rail.emoji,
-        query: CATEGORIES.find(c => c.id === rail.categoryId)?.query || ''
+        query: categories.find(c => c.id === rail.categoryId)?.query || ''
       }))
     }
 
     // Return merged categories with dynamic ones on top (already sorted by score)
     // The mergeCategoriesWithDynamic function handles the sorting
     return merged
-  }, [categoryEvents, interactionTrigger, isMounted])
+  }, [categoryEvents, interactionTrigger, isMounted, categories])
 
   // Vertical infinite scroll: Load more categories when user scrolls to bottom
   useEffect(() => {
@@ -513,7 +593,7 @@ export default function HomePage() {
               {userLocation ? 'Events Near You' : 'Discover Events'}
             </p>
             <p className="text-xs sm:text-sm text-gray-400 mb-4 sm:mb-6">
-              Real-time events from Ticketmaster & EventBrite - {CATEGORIES.length} Curated Categories
+              Real-time events from Ticketmaster & EventBrite - {categories.length} Curated Categories
             </p>
             <div className="text-[10px] sm:text-xs text-gray-500 mb-3 sm:mb-4 max-w-2xl mx-auto leading-relaxed">
               🎵 Entertainment: Music, Nightlife, Comedy, Theatre, Arts & Film<br className="hidden sm:block" />
@@ -609,7 +689,7 @@ export default function HomePage() {
                     const affinity = computeAffinity(interactions)
                     const topCat = Object.entries(affinity.categories)
                       .sort(([,a], [,b]) => b - a)[0]
-                    const catName = CATEGORIES.find(c => c.id === topCat?.[0])?.title
+                    const catName = categories.find(c => c.id === topCat?.[0])?.title
                     return (
                       <span className="text-white">
                         🎯 <strong>{interactions.length} interactions tracked</strong> ·
@@ -634,7 +714,7 @@ export default function HomePage() {
           <HappeningNowBanner
             allEvents={Object.values(categoryEvents).flat()}
             onEventClick={handleEventClick}
-            categories={CATEGORIES}
+            categories={categories}
           />
         )}
 
@@ -643,7 +723,7 @@ export default function HomePage() {
           <ForYouHero
             allEvents={Object.values(categoryEvents).flat()}
             onEventClick={handleEventClick}
-            categories={CATEGORIES}
+            categories={categories}
           />
         )}
 
@@ -662,7 +742,7 @@ export default function HomePage() {
             <div className="text-center py-12 sm:py-16 md:py-20">
               <div className="animate-spin rounded-full h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16 border-b-2 border-orange-500 mx-auto mb-3 sm:mb-4"></div>
               <p className="text-base sm:text-lg md:text-xl px-4">🔍 Finding events near you...</p>
-              <p className="text-xs sm:text-sm text-gray-400 mt-2 px-4">Loading {CATEGORIES.length} curated categories from Ticketmaster & EventBrite...</p>
+              <p className="text-xs sm:text-sm text-gray-400 mt-2 px-4">Loading {categories.length} curated categories from Ticketmaster & EventBrite...</p>
             </div>
           ) : (
             <AnimatePresence mode="popLayout">

@@ -3,89 +3,54 @@ import * as Sentry from "@sentry/nextjs";
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
 
-  // Set environment
-  environment: process.env.NODE_ENV,
-
   // Adjust this value in production, or use tracesSampler for greater control
-  tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+  tracesSampleRate: 1.0,
 
-  // Session Replay
-  replaysSessionSampleRate: 0.01, // 1% of sessions
-  replaysOnErrorSampleRate: 1.0, // 100% of sessions with errors
+  // Setting this option to true will print useful information to the console while you're setting up Sentry.
+  debug: false,
 
-  // Integrations
+  replaysOnErrorSampleRate: 1.0,
+
+  // This sets the sample rate to be 10%. You may want this to be 100% while
+  // in development and sample at a lower rate in production
+  replaysSessionSampleRate: 0.1,
+
+  // You can remove this option if you're not planning to use the Sentry Session Replay feature:
   integrations: [
     Sentry.replayIntegration({
+      // Additional Replay configuration goes in here, for example:
       maskAllText: true,
       blockAllMedia: true,
     }),
-    Sentry.browserTracingIntegration(),
-    Sentry.captureConsoleIntegration({
-      levels: ['error', 'warn'],
-    }),
   ],
 
-  // Performance Monitoring - Web Vitals
-  beforeSend(event, hint) {
-    // Filter out known browser extension errors
-    const error = hint.originalException;
-    if (
-      error &&
-      typeof error === 'object' &&
-      'message' in error &&
-      typeof error.message === 'string'
-    ) {
-      if (
-        error.message.includes('chrome-extension://') ||
-        error.message.includes('moz-extension://') ||
-        error.message.includes('safari-extension://')
-      ) {
-        return null;
-      }
-    }
+  // Environment
+  environment: process.env.NODE_ENV,
 
-    // Sanitize sensitive data
-    if (event.request) {
-      delete event.request.cookies;
-
-      if (event.request.headers) {
-        delete event.request.headers.authorization;
-        delete event.request.headers.cookie;
-      }
-    }
-
-    return event;
-  },
-
-  // Add custom tags
-  initialScope: {
-    tags: {
-      runtime: 'client',
-    },
-  },
-
-  // Ignore specific errors
+  // Ignore common errors that aren't actionable
   ignoreErrors: [
     // Browser extensions
     'top.GLOBALS',
-    'chrome-extension',
-    'moz-extension',
-    'safari-extension',
-    // Network errors that are expected
+    'originalCreateNotification',
+    'canvas.contentDocument',
+    'MyApp_RemoveAllHighlights',
+    // Network errors
     'Network request failed',
+    'Failed to fetch',
     'NetworkError',
-    // Common browser issues
+    'Load failed',
+    // ResizeObserver
     'ResizeObserver loop limit exceeded',
-    'Non-Error promise rejection captured',
+    'ResizeObserver loop completed with undelivered notifications',
   ],
 
-  // Denyurls - ignore errors from these URLs
-  denyUrls: [
-    /extensions\//i,
-    /^chrome:\/\//i,
-    /^moz-extension:\/\//i,
-  ],
-
-  // Enable debug mode only when explicitly requested
-  debug: false, // Set to true only for debugging Sentry itself
+  beforeSend(event, hint) {
+    // Filter out errors from browser extensions
+    if (event.exception?.values?.[0]?.stacktrace?.frames?.some(
+      frame => frame.filename?.includes('extensions/')
+    )) {
+      return null;
+    }
+    return event;
+  },
 });

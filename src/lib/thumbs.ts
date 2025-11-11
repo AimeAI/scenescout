@@ -25,7 +25,8 @@ const MAX_VOTES = 1000
  */
 export function isThumbsEnabled(): boolean {
   if (typeof window === 'undefined') return false
-  return process.env.NEXT_PUBLIC_FEATURE_THUMBS === 'true'
+  // Always enabled now - thumbs down is core functionality
+  return true
 }
 
 /**
@@ -162,6 +163,14 @@ export function getDownvotedEventIds(): Set<string> {
       .filter(v => v.vote === 'down')
       .map(v => v.eventId)
   )
+}
+
+/**
+ * Get all hidden event IDs (permanently removed from view)
+ */
+export function getHiddenEventIds(): Set<string> {
+  // Hidden events are same as downvoted events (thumbs down = hide)
+  return getDownvotedEventIds()
 }
 
 /**

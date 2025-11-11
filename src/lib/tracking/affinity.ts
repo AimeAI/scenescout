@@ -106,12 +106,17 @@ export function computeAffinity(
 /**
  * Reorder rows based on affinity scores while preserving discovery floor
  * Non-empty rows are reordered, empty rows appended in original order
+ *
+ * DIVERSITY STRATEGY:
+ * - discoveryFloor (default 20%): Forces showing categories in original order to prevent filter bubble
+ * - Injects variety by mixing personalized + discovery categories
+ * - Ensures user sees new content even with strong preferences
  */
 export function reorderRows(
   rows: Row[],
   affinity: AffinityProfile,
   categoryEvents: Record<string, any[]> = {},
-  opts: ReorderOptions = { discoveryFloor: 0.2 }
+  opts: ReorderOptions = { discoveryFloor: 0.25 } // Increased from 0.2 to 0.25 for more diversity
 ): Row[] {
   // Edge case: no data yet, return original
   if (affinity.totalInteractions === 0) return rows
@@ -153,11 +158,40 @@ export function reorderRows(
   const personalizedCount = nonEmptyRows.length - discoveryCount
   const personalizedRows = scored.slice(0, personalizedCount).map(s => s.row)
 
-  // Keep last discoveryCount non-empty rows in original order (discovery)
-  const discoveryRows = nonEmptyRows.slice(-discoveryCount)
+  // DIVERSITY INJECTION: Instead of keeping discovery rows at the end,
+  // pick categories user HASN'T interacted with much (low affinity scores)
+  // This prevents showing ONLY what user likes
+  const lowAffinityCategories = scored
+    .filter(s => s.score < 0.3) // Categories with low affinity
+    .slice(0, discoveryCount)
+    .map(s => s.row)
+
+  // If not enough low-affinity categories, fill with original order
+  const discoveryRows = lowAffinityCategories.length >= discoveryCount
+    ? lowAffinityCategories
+    : [...lowAffinityCategories, ...nonEmptyRows.slice(-Math.max(0, discoveryCount - lowAffinityCategories.length))]
+
+  // Interleave personalized and discovery to create variety
+  // Pattern: personalized, personalized, discovery, personalized, discovery...
+  const result: Row[] = []
+  let pIdx = 0
+  let dIdx = 0
+
+  while (pIdx < personalizedRows.length || dIdx < discoveryRows.length) {
+    // Add 2 personalized, then 1 discovery
+    if (pIdx < personalizedRows.length) {
+      result.push(personalizedRows[pIdx++])
+    }
+    if (pIdx < personalizedRows.length) {
+      result.push(personalizedRows[pIdx++])
+    }
+    if (dIdx < discoveryRows.length) {
+      result.push(discoveryRows[dIdx++])
+    }
+  }
 
   // Append empty rows at the end in original order
-  return [...personalizedRows, ...discoveryRows, ...emptyRows]
+  return [...result, ...emptyRows]
 }
 
 /**

@@ -51,6 +51,7 @@ export function Sidebar() {
 
       {/* Account section at bottom */}
       <div className="border-t border-white/10 pt-3 mt-3">
+        <Item href="/settings" label="⚙️ Settings" />
         <Item href="/account" label="👤 Account" />
       </div>
     </aside>

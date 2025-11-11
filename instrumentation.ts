@@ -1,12 +1,3 @@
-/**
- * Next.js Instrumentation
- *
- * This file runs before the application starts and is used to initialize
- * monitoring and observability tools like Sentry.
- *
- * @see https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation
- */
-
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     await import('./sentry.server.config');
@@ -18,32 +9,27 @@ export async function register() {
 }
 
 export const onRequestError = async (
-  err: Error & { digest?: string },
+  err: unknown,
   request: {
     path: string;
     method: string;
-    headers: { [key: string]: string | undefined };
+    headers: { [key: string]: string | string[] | undefined };
+  },
+  context: {
+    routerKind: 'Pages Router' | 'App Router';
+    routePath: string;
+    routeType: 'render' | 'route' | 'action' | 'middleware';
   }
 ) => {
-  // Only import Sentry in Node.js runtime
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     const Sentry = await import('@sentry/nextjs');
-
     Sentry.captureException(err, {
-      contexts: {
-        request: {
-          url: request.path,
-          method: request.method,
-          headers: {
-            // Don't send sensitive headers
-            'user-agent': request.headers['user-agent'],
-            'accept-language': request.headers['accept-language'],
-          },
-        },
-      },
       tags: {
-        runtime: 'nodejs',
-        error_type: 'request_error',
+        path: request.path,
+        method: request.method,
+        routerKind: context.routerKind,
+        routePath: context.routePath,
+        routeType: context.routeType,
       },
     });
   }
