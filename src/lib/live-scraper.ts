@@ -701,8 +701,119 @@ export class LiveEventScraper {
     return 'social'
   }
 
+  async scrapeResidentAdvisor(query: string, limit: number = 20): Promise<ScrapedEvent[]> {
+    const events: ScrapedEvent[] = []
+
+    try {
+      // RA.co URL for Toronto events
+      const raUrl = `https://ra.co/events/ca/toronto`
+      console.log(`🎧 Scraping Resident Advisor: ${raUrl}`)
+
+      const response = await axios.get(raUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+        },
+        timeout: 10000
+      })
+
+      const $ = cheerio.load(response.data)
+
+      // RA.co uses specific selectors for event listings
+      $('article, li[itemtype="http://schema.org/Event"], .event-item, [data-tracking-id]').each((i, elem) => {
+        if (events.length >= limit) return false
+
+        const $elem = $(elem)
+
+        // Extract title
+        const title = $elem.find('h3, h2, a[href*="/events/"], .title').first().text().trim()
+        if (!title || title.length < 3) return
+
+        // Extract date
+        const dateText = $elem.find('time, .date, [datetime]').first().text().trim() ||
+                        $elem.find('time, .date').first().attr('datetime') || ''
+
+        const { date, time } = this.parseDateTime(dateText, title)
+
+        // Extract venue
+        const venueText = $elem.find('[itemprop="location"], .location, .venue').first().text().trim()
+        const venue = this.extractVenueName(venueText) || 'Toronto Venue'
+
+        // Extract description
+        const description = $elem.find('.description, p').first().text().trim() ||
+                          `${title} - Electronic music event in Toronto`
+
+        // Extract link
+        const linkElement = $elem.find('a').first()
+        const link = linkElement.attr('href') || ''
+        const fullUrl = link?.startsWith('http') ? link : `https://ra.co${link}`
+
+        // Skip if no valid URL
+        if (!fullUrl.includes('ra.co')) return
+
+        // Extract image
+        const imageElement = $elem.find('img').first()
+        const imageUrl = imageElement.attr('src') || imageElement.attr('data-src') || ''
+
+        // RA.co events are typically ticketed, but price isn't always shown
+        const priceText = $elem.find('.price, .cost').first().text().trim()
+        const { price, priceMax, priceRange } = priceText ?
+          this.parsePrice(priceText) :
+          { price: undefined, priceMax: undefined, priceRange: '' }
+
+        // Get venue coordinates
+        const venueInfo = this.getVenueInfo(venue)
+
+        // Only add future events
+        const eventDate = new Date(date)
+        const now = new Date()
+        now.setHours(0, 0, 0, 0)
+
+        if (eventDate >= now || isNaN(eventDate.getTime())) {
+          events.push({
+            title: title.substring(0, 255),
+            description,
+            date,
+            time,
+            venue_name: venue,
+            address: venueInfo.address,
+            price_min: price,
+            price_max: priceMax,
+            price_range: priceRange,
+            external_url: fullUrl,
+            category: 'music',
+            image_url: imageUrl?.startsWith('http') ? imageUrl : '',
+            latitude: venueInfo.lat,
+            longitude: venueInfo.lng
+          })
+        }
+      })
+
+      console.log(`   🎧 RA.co: Found ${events.length} electronic music events`)
+    } catch (error) {
+      console.error('RA.co scraping failed:', error.message)
+    }
+
+    return events
+  }
+
   async scrapeAll(query: string, limit: number = 50): Promise<ScrapedEvent[]> {
     console.log(`🔍 Live scraping for: "${query}" (limit: ${limit})`)
+
+    // Check if this is an underground/electronic music query
+    const isUndergroundQuery = query.toLowerCase().includes('underground') ||
+                              query.toLowerCase().includes('dj') ||
+                              query.toLowerCase().includes('electronic') ||
+                              query.toLowerCase().includes('edm') ||
+                              query.toLowerCase().includes('techno') ||
+                              query.toLowerCase().includes('house')
+
+    // Scrape from RA.co for underground electronic events
+    let raEvents: ScrapedEvent[] = []
+    if (isUndergroundQuery) {
+      raEvents = await this.scrapeResidentAdvisor(query, 20)
+      console.log(`   🎧 RA.co: ${raEvents.length} events`)
+    }
 
     // Scrape from EventBrite
     const eventbriteEvents = await this.scrapeEventbrite(query, limit)
@@ -721,11 +832,15 @@ export class LiveEventScraper {
       console.warn(`   ⚠️  Ticketmaster API unavailable for "${query}"`)
     }
 
-    // Combine and deduplicate
-    const allEvents = [...eventbriteEvents, ...ticketmasterEvents]
+    // Combine and deduplicate - prioritize RA.co for underground events
+    const allEvents = isUndergroundQuery ?
+      [...raEvents, ...eventbriteEvents, ...ticketmasterEvents] :
+      [...eventbriteEvents, ...ticketmasterEvents]
+
     const uniqueEvents = this.removeDuplicates(allEvents)
 
-    console.log(`✅ Found ${uniqueEvents.length} unique relevant events (EventBrite + Ticketmaster)`)
+    const sources = isUndergroundQuery ? 'RA.co + EventBrite + Ticketmaster' : 'EventBrite + Ticketmaster'
+    console.log(`✅ Found ${uniqueEvents.length} unique relevant events (${sources})`)
     return uniqueEvents
   }
 
