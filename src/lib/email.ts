@@ -6,8 +6,19 @@ import WelcomeToBetaEmail from '@/emails/WelcomeToBeta';
 import EventReminderEmail from '@/emails/EventReminder';
 import WeeklyDigestEmail from '@/emails/WeeklyDigest';
 
-// Initialize Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy initialize Resend to avoid build errors when API key is not set
+let resend: Resend | null = null;
+
+function getResendClient(): Resend {
+  if (!resend) {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      throw new Error('RESEND_API_KEY is not configured');
+    }
+    resend = new Resend(apiKey);
+  }
+  return resend;
+}
 
 // Initialize Supabase (for logging)
 const supabase = createClient(
@@ -58,7 +69,7 @@ export async function sendBetaInvite(
       BetaInviteEmail({ inviteCode: code, recipientName })
     );
 
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResendClient().emails.send({
       from: `${FROM_NAME} <${FROM_EMAIL}>`,
       to: email,
       subject: "You're invited to SceneScout Beta!",
@@ -117,7 +128,7 @@ export async function sendWelcomeEmail(
       WelcomeToBetaEmail({ userName: name, userEmail: email })
     );
 
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResendClient().emails.send({
       from: `${FROM_NAME} <${FROM_EMAIL}>`,
       to: email,
       subject: 'Welcome to SceneScout!',
@@ -187,7 +198,7 @@ export async function sendEventReminder(
       })
     );
 
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResendClient().emails.send({
       from: `${FROM_NAME} <${FROM_EMAIL}>`,
       to: email,
       subject: `Reminder: ${eventData.eventName}`,
@@ -262,7 +273,7 @@ export async function sendWeeklyDigest(
       })
     );
 
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResendClient().emails.send({
       from: `${FROM_NAME} <${FROM_EMAIL}>`,
       to: email,
       subject: `Your Weekly Digest - ${events.length} Events`,
@@ -337,7 +348,7 @@ export async function testEmailConnection(): Promise<{
     }
 
     // Test with a simple API call
-    const { error } = await resend.emails.send({
+    const { error } = await getResendClient().emails.send({
       from: `${FROM_NAME} <${FROM_EMAIL}>`,
       to: 'test@resend.dev', // Resend's test email
       subject: 'Test Email',
