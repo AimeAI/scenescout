@@ -6,17 +6,24 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60 // 60 seconds max for Vercel
 
-// Configure web-push
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || ''
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || ''
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:support@scenescout.app'
+// Lazy initialize web-push to avoid build errors when env vars are not set
+let webpushConfigured = false
 
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(
-    VAPID_SUBJECT,
-    VAPID_PUBLIC_KEY,
-    VAPID_PRIVATE_KEY
-  )
+function configureWebPush() {
+  if (webpushConfigured) return
+
+  const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+  const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY
+  const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:support@scenescout.app'
+
+  if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails(
+      VAPID_SUBJECT,
+      VAPID_PUBLIC_KEY,
+      VAPID_PRIVATE_KEY
+    )
+    webpushConfigured = true
+  }
 }
 
 /**
@@ -29,6 +36,9 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now()
 
   try {
+    // Configure web-push
+    configureWebPush()
+
     // Verify this is called by Vercel Cron or in development
     const authHeader = request.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET

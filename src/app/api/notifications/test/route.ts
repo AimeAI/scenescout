@@ -5,17 +5,24 @@ import webpush from 'web-push'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// Configure web-push
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || ''
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || ''
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:support@scenescout.app'
+// Lazy initialize web-push to avoid build errors when env vars are not set
+let webpushConfigured = false
 
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(
-    VAPID_SUBJECT,
-    VAPID_PUBLIC_KEY,
-    VAPID_PRIVATE_KEY
-  )
+function configureWebPush() {
+  if (webpushConfigured) return
+
+  const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+  const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY
+  const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:support@scenescout.app'
+
+  if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails(
+      VAPID_SUBJECT,
+      VAPID_PUBLIC_KEY,
+      VAPID_PRIVATE_KEY
+    )
+    webpushConfigured = true
+  }
 }
 
 /**
@@ -31,6 +38,9 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Configure web-push
+    configureWebPush()
+
     const supabase = getServiceSupabaseClient()
     const body = await request.json()
 
