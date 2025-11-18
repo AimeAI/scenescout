@@ -43,7 +43,7 @@ const nextConfig = {
   poweredByHeader: false,
 
   // Exclude packages that shouldn't be bundled for serverless functions
-  serverComponentsExternalPackages: ['jsdom', 'parse5', 'puppeteer'],
+  serverComponentsExternalPackages: ['jsdom', 'parse5', 'puppeteer', 'isomorphic-dompurify', 'dompurify'],
 
   // Enable instrumentation for Sentry
   experimental: {
