@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabaseClient } from '@/lib/supabase-server'
 import { queryCache, CACHE_KEYS, CACHE_TTL, invalidateCache } from '@/lib/query-cache'

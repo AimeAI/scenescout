@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 /**
  * API route for batch event processing using spawner
  */

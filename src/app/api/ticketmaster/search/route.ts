@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSceneScoutCategory } from '@/lib/api/category-mappings'
 
+// Force dynamic rendering - don't pre-render at build time
+export const dynamic = 'force-dynamic'
+
 // Cache for 5 minutes to reduce API calls
 export const revalidate = 300
 
