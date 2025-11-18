@@ -7,10 +7,24 @@ import { urlSchema, eventDateSchema } from './schemas'
 
 // Conditional import for isomorphic-dompurify - fallback for serverless environments
 let DOMPurify: any = null
+let useFallback = false
 try {
   DOMPurify = require('isomorphic-dompurify')
 } catch (error) {
-  console.warn('DOMPurify not available in serverless environment, using fallback sanitization')
+  useFallback = true
+  console.warn('DOMPurify not available, using lightweight fallback')
+}
+
+/**
+ * Lightweight fallback sanitization (when DOMPurify unavailable)
+ */
+function fallbackSanitize(dirty: string): string {
+  return dirty
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+    .trim()
 }
 
 /**
@@ -19,14 +33,9 @@ try {
 export function sanitizeHtml(dirty: string, allowedTags?: string[]): string {
   if (!dirty || typeof dirty !== 'string') return ''
 
-  // Fallback sanitization when DOMPurify is not available (serverless environments)
-  if (!DOMPurify) {
-    return dirty
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove script tags
-      .replace(/<[^>]*>/g, '') // Remove all HTML tags
-      .replace(/javascript:/gi, '') // Remove javascript: protocols
-      .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '') // Remove event handlers
-      .trim()
+  // Use fallback for serverless or when DOMPurify unavailable
+  if (useFallback) {
+    return fallbackSanitize(dirty)
   }
 
   const config = allowedTags ? {
