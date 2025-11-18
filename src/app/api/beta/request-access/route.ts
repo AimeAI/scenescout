@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Lazy initialize Supabase to avoid build errors when env vars are not set
+let supabase: SupabaseClient | null = null;
+
+function getSupabaseClient(): SupabaseClient {
+  if (!supabase) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!url || !key) {
+      throw new Error('Supabase configuration is missing');
+    }
+
+    supabase = createClient(url, key);
+  }
+  return supabase;
+}
 
 /**
  * POST /api/beta/request-access
@@ -31,7 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if already on waitlist
-    const { data: existing } = await supabase
+    const { data: existing } = await getSupabaseClient()
       .from('beta_waitlist')
       .select('id, invited_at')
       .eq('email', email.toLowerCase())
@@ -58,7 +70,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Add to waitlist
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('beta_waitlist')
       .insert([
         {

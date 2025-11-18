@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 // Types for ingestion
 interface IngestResponse {
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Invoke the edge function
-    const { data, error } = await supabase.functions.invoke(functionName, {
+    const { data, error } = await getSupabaseClient().functions.invoke(functionName, {
       body: functionBody
     })
 

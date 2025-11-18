@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 // Rate limiting storage (in-memory for simplicity, use Redis in production)
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>()

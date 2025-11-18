@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update cache status
-    await supabase.from('cache_status').upsert({
+    await getSupabaseClient().from('cache_status').upsert({
       cache_key: `events_${city.toLowerCase().replace(/\s+/g, '_')}`,
       last_refreshed_at: new Date().toISOString(),
       event_count: totalEvents,

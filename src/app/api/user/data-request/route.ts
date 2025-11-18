@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 
 // Rate limiting storage
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     })
 
     // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await getSupabaseClient().auth.getUser()
     if (authError || !user) {
       return NextResponse.json(
         { error: 'Invalid authentication' },
