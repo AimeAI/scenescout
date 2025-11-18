@@ -36,7 +36,7 @@ const DEFAULT_CATEGORIES: SearchCategory[] = [
   { id: 'electronic', name: '🎧 Electronic', query: 'electronic', enabled: true, eventsPerCategory: 5 },
   { id: 'festivals', name: '🎉 Festivals', query: 'festival', enabled: true, eventsPerCategory: 5 },
   { id: 'nightlife', name: '🌃 Nightlife', query: 'club', enabled: true, eventsPerCategory: 5 },
-  { id: 'underground', name: '🎧 Underground', query: 'electronic music', enabled: true, eventsPerCategory: 10 },
+  { id: 'underground', name: '🎧 Underground', query: 'underground', enabled: true, eventsPerCategory: 10 },
 ]
 
 const DEFAULT_PREFERENCES: UserPreferences = {
