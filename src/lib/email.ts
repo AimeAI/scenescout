@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { render } from '@react-email/components';
 import BetaInviteEmail from '@/emails/BetaInvite';
 import WelcomeToBetaEmail from '@/emails/WelcomeToBeta';
@@ -20,11 +20,22 @@ function getResendClient(): Resend {
   return resend;
 }
 
-// Initialize Supabase (for logging)
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Lazy initialize Supabase to avoid build errors when env vars are not set
+let supabaseClient: SupabaseClient | null = null;
+
+function getSupabaseClient(): SupabaseClient {
+  if (!supabaseClient) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!url || !key) {
+      throw new Error('Supabase configuration is missing');
+    }
+
+    supabaseClient = createClient(url, key);
+  }
+  return supabaseClient;
+}
 
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'noreply@scenescout.app';
 const FROM_NAME = 'SceneScout';

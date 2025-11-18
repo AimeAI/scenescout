@@ -1,11 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { sendBetaInvite } from '@/lib/email';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Lazy initialize Supabase to avoid build errors when env vars are not set
+let supabase: SupabaseClient | null = null;
+
+function getSupabaseClient(): SupabaseClient {
+  if (!supabase) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!url || !key) {
+      throw new Error('Supabase configuration is missing');
+    }
+
+    supabase = createClient(url, key);
+  }
+  return supabase;
+}
 
 /**
  * POST /api/beta/generate-invites
@@ -23,7 +35,7 @@ export async function POST(request: NextRequest) {
     const token = authHeader.substring(7);
 
     // Verify user is admin
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: authError } = await getSupabaseClient().auth.getUser(token);
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -62,7 +74,7 @@ export async function POST(request: NextRequest) {
     // Generate codes
     const codes: string[] = [];
     for (let i = 0; i < (emails.length || count); i++) {
-      const { data: codeData } = await supabase.rpc('generate_invite_code');
+      const { data: codeData } = await getSupabaseClient().rpc('generate_invite_code');
       if (codeData) {
         codes.push(codeData);
       }
@@ -142,7 +154,7 @@ export async function GET(request: NextRequest) {
 
     const token = authHeader.substring(7);
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: authError } = await getSupabaseClient().auth.getUser(token);
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
