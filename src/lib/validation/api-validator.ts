@@ -274,10 +274,18 @@ export async function validateAndRateLimit<T>(
   apiName: string,
   rateLimitConfig?: { maxRequests: number; windowMs: number }
 ): Promise<{ data: T; response?: NextResponse } | { response: NextResponse }> {
-  // Check rate limit first
-  const rateLimitResult = await checkRateLimit(request, apiName, rateLimitConfig)
-  if (!rateLimitResult.allowed) {
-    return { response: rateLimitResult.response! }
+  // Check rate limit first (skip in Vercel serverless environment)
+  const isVercel = process.env.VERCEL === '1'
+  if (!isVercel) {
+    try {
+      const rateLimitResult = await checkRateLimit(request, apiName, rateLimitConfig)
+      if (!rateLimitResult.allowed) {
+        return { response: rateLimitResult.response! }
+      }
+    } catch (error) {
+      // Rate limiter failed, but don't block the request
+      console.warn('Rate limiter error (skipping):', error)
+    }
   }
 
   // Validate request
