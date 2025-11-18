@@ -12,7 +12,13 @@ const API_KEY = process.env.TICKETMASTER_API_KEY || process.env.TICKETMASTER_CON
 
 // In-memory cache to prevent duplicate requests within same deployment
 const requestCache = new Map<string, { data: any; timestamp: number }>()
-const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+const CACHE_TTL = 15 * 60 * 1000 // 15 minutes (increased to reduce rate limit hits)
+
+// Rate limit tracking
+const rateLimitState = {
+  retryAfter: 0, // Timestamp when we can retry
+  consecutiveErrors: 0
+}
 
 interface TicketmasterEvent {
   id: string
@@ -138,6 +144,21 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Check if we're in rate limit cooldown
+    if (rateLimitState.retryAfter > Date.now()) {
+      const waitSeconds = Math.ceil((rateLimitState.retryAfter - Date.now()) / 1000)
+      console.log(`⏳ Ticketmaster rate limit active, ${waitSeconds}s remaining`)
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Ticketmaster API rate limit reached',
+          retryAfter: waitSeconds,
+          events: []
+        },
+        { status: 429 }
+      )
+    }
+
     // Create cache key from request parameters (including sort)
     const cacheKey = `${query}|${limit}|${city}|${lat}|${lng}|${classificationName}|${startDate}|${endDate}|${sortBy}`
 
@@ -209,12 +230,39 @@ export async function GET(request: NextRequest) {
     })
 
     if (!response.ok) {
+      // Handle rate limiting (429)
+      if (response.status === 429) {
+        // Get Retry-After header or use exponential backoff
+        const retryAfterHeader = response.headers.get('Retry-After')
+        const retryAfterSeconds = retryAfterHeader
+          ? parseInt(retryAfterHeader)
+          : Math.min(60 * (rateLimitState.consecutiveErrors + 1), 300) // Max 5 minutes
+
+        rateLimitState.retryAfter = Date.now() + (retryAfterSeconds * 1000)
+        rateLimitState.consecutiveErrors++
+
+        console.warn(`⚠️ Ticketmaster API returned 429. Retry after ${retryAfterSeconds}s`)
+
+        // Return empty results instead of error to gracefully degrade
+        return NextResponse.json({
+          success: true,
+          events: [],
+          pagination: { total: 0, page: 1, limit },
+          source: 'ticketmaster',
+          rateLimited: true,
+          retryAfter: retryAfterSeconds
+        })
+      }
+
       console.error('Ticketmaster API error:', response.status, response.statusText)
       return NextResponse.json(
-        { success: false, error: `Ticketmaster API error: ${response.status}` },
+        { success: false, error: `Ticketmaster API error: ${response.status}`, events: [] },
         { status: response.status }
       )
     }
+
+    // Reset consecutive errors on success
+    rateLimitState.consecutiveErrors = 0
 
     const data: TicketmasterResponse = await response.json()
     
