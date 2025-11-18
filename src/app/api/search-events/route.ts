@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     // Try EventBrite (secondary source) using live scraper with improved date detection
     try {
-      const ebResponse = await fetch(`${request.nextUrl.origin}/api/search-live?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 100)}`)
+      const ebResponse = await fetch(`${request.nextUrl.origin}/api/search-live?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 100)}&${locationParams}`)
       if (ebResponse.ok) {
         const ebData = await ebResponse.json()
         if (ebData.success && ebData.events?.length > 0) {
