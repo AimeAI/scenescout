@@ -3,14 +3,31 @@
  * Removes potentially harmful content from user inputs
  */
 
-import DOMPurify from 'isomorphic-dompurify'
 import { urlSchema, eventDateSchema } from './schemas'
+
+// Conditional import for isomorphic-dompurify - fallback for serverless environments
+let DOMPurify: any = null
+try {
+  DOMPurify = require('isomorphic-dompurify')
+} catch (error) {
+  console.warn('DOMPurify not available in serverless environment, using fallback sanitization')
+}
 
 /**
  * Sanitize HTML content to prevent XSS attacks
  */
 export function sanitizeHtml(dirty: string, allowedTags?: string[]): string {
   if (!dirty || typeof dirty !== 'string') return ''
+
+  // Fallback sanitization when DOMPurify is not available (serverless environments)
+  if (!DOMPurify) {
+    return dirty
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove script tags
+      .replace(/<[^>]*>/g, '') // Remove all HTML tags
+      .replace(/javascript:/gi, '') // Remove javascript: protocols
+      .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '') // Remove event handlers
+      .trim()
+  }
 
   const config = allowedTags ? {
     ALLOWED_TAGS: allowedTags,
