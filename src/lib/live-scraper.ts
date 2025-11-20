@@ -196,9 +196,14 @@ export class LiveEventScraper {
 
             console.log(`💰 "${title.substring(0, 40)}": "${priceText}" -> ${priceRange}`)
 
-            // Extract image
+            // Extract image - EventBrite uses various lazy-loading attributes
             const imageElement = $elem.find('img').first()
-            const imageUrl = imageElement.attr('src') || imageElement.attr('data-src') || ''
+            const imageUrl = imageElement.attr('src') ||
+                            imageElement.attr('data-src') ||
+                            imageElement.attr('data-lazy-src') ||
+                            imageElement.attr('data-image') ||
+                            imageElement.attr('srcset')?.split(',')[0]?.trim()?.split(' ')[0] ||
+                            ''
 
             // Extract link
             const linkElement = $elem.find('a').first()
@@ -347,7 +352,12 @@ export class LiveEventScraper {
               const priceText = $elem.find('[data-testid="event-price"], .price, .ticket-price').first().text().trim()
               const { price, priceMax, priceRange } = this.parsePrice(priceText)
               const imageElement = $elem.find('img').first()
-              const imageUrl = imageElement.attr('src') || imageElement.attr('data-src') || ''
+              const imageUrl = imageElement.attr('src') ||
+                              imageElement.attr('data-src') ||
+                              imageElement.attr('data-lazy-src') ||
+                              imageElement.attr('data-image') ||
+                              imageElement.attr('srcset')?.split(',')[0]?.trim()?.split(' ')[0] ||
+                              ''
               const linkElement = $elem.find('a').first()
               const link = linkElement.attr('href') || ''
               const venueInfo = this.getVenueInfo(venue)
