@@ -34,7 +34,7 @@ export class LiveEventScraper {
    * Fetch accurate date from EventBrite event page meta tags
    * Used when search results only show partial dates like "Oct 25"
    */
-  private async fetchEventPageDate(eventUrl: string): Promise<{ date: string, time: string } | null> {
+  private async fetchEventPageDate(eventUrl: string): Promise<{ date: string, time: string, imageUrl?: string } | null> {
     try {
       const response = await axios.get(eventUrl, {
         headers: {
@@ -45,6 +45,12 @@ export class LiveEventScraper {
 
       const $ = cheerio.load(response.data)
 
+      // Extract image from meta tags or main event image
+      const imageUrl = $('meta[property="og:image"]').attr('content') ||
+                      $('meta[name="twitter:image"]').attr('content') ||
+                      $('.event-image img, .event-hero img, [data-testid="event-image"] img').first().attr('src') ||
+                      ''
+
       // Extract from meta tag: <meta property="event:start_time" content="2026-08-25T09:00:00-04:00">
       const startTimeMeta = $('meta[property="event:start_time"]').attr('content')
       if (startTimeMeta) {
@@ -52,7 +58,7 @@ export class LiveEventScraper {
         if (!isNaN(eventDate.getTime())) {
           const date = eventDate.toISOString().split('T')[0]
           const time = eventDate.toISOString().split('T')[1].substring(0, 8)
-          return { date, time }
+          return { date, time, imageUrl: imageUrl?.startsWith('http') ? imageUrl : '' }
         }
       }
 
@@ -258,6 +264,10 @@ export class LiveEventScraper {
                 if (accurateDateTime) {
                   tempEvent.date = accurateDateTime.date
                   tempEvent.time = accurateDateTime.time
+                  // Use image from event page if we don't have one from listing
+                  if (accurateDateTime.imageUrl && !tempEvent.imageUrl) {
+                    tempEvent.imageUrl = accurateDateTime.imageUrl
+                  }
                   console.log(`✅ Fetched accurate date for "${tempEvent.title.substring(0, 30)}": ${tempEvent.date} ${tempEvent.time}`)
                 }
               } catch (e) {
