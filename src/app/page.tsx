@@ -741,8 +741,9 @@ export default function HomePage() {
           {loading ? (
             <div className="text-center py-12 sm:py-16 md:py-20">
               <div className="animate-spin rounded-full h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16 border-b-2 border-orange-500 mx-auto mb-3 sm:mb-4"></div>
-              <p className="text-base sm:text-lg md:text-xl px-4">🔍 Finding events near you...</p>
-              <p className="text-xs sm:text-sm text-gray-400 mt-2 px-4">Loading {categories.length} curated categories from Ticketmaster & EventBrite...</p>
+              <p className="text-base sm:text-lg md:text-xl px-4 font-semibold">⏳ Please wait while events load...</p>
+              <p className="text-xs sm:text-sm text-gray-400 mt-2 px-4">Finding the best events from Ticketmaster & EventBrite</p>
+              <p className="text-xs text-gray-500 mt-3 px-4">Loading {categories.length} curated categories - this may take a moment</p>
             </div>
           ) : (
             <AnimatePresence mode="popLayout">
@@ -903,23 +904,16 @@ export default function HomePage() {
 
                           {/* Event Image */}
                           <div className="relative h-32 sm:h-36 md:h-40 overflow-hidden">
-                            {event.image_url ? (
-                              <img
-                                src={event.image_url}
-                                alt={event.title}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none'
-                                  e.currentTarget.nextElementSibling.style.display = 'flex'
-                                }}
-                              />
-                            ) : null}
-                            
-                            {/* Fallback gradient */}
-                            <div className={`absolute inset-0 bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-4xl text-white ${event.image_url ? 'hidden' : 'flex'}`}>
-                              {category.emoji}
-                            </div>
-                            
+                            <img
+                              src={event.image_url || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800&h=600&fit=crop&q=80'}
+                              alt={event.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              onError={(e) => {
+                                // If image fails to load, use a reliable default
+                                e.currentTarget.src = 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800&h=600&fit=crop&q=80'
+                              }}
+                            />
+
                             {/* Overlay for better text readability */}
                             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                             

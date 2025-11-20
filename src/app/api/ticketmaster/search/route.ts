@@ -85,13 +85,42 @@ interface TicketmasterResponse {
 function convertTicketmasterEvent(tmEvent: TicketmasterEvent): any {
   const venue = tmEvent._embedded?.venues?.[0]
   const priceRange = tmEvent.priceRanges?.[0]
-  const image = tmEvent.images?.find(img => img.width >= 640) || tmEvent.images?.[0]
+
+  // Try multiple image selection strategies for best quality
+  const images = tmEvent.images || []
+  const image =
+    images.find(img => img.width >= 1024) || // Prefer high-res
+    images.find(img => img.width >= 640) ||  // Good quality
+    images.find(img => img.width >= 305) ||  // Medium quality
+    images[0] // Fallback to any image
+
   const classification = tmEvent.classifications?.[0]
-  
+
   // Get SceneScout category from Ticketmaster classification
   const segment = classification?.segment?.name || 'Miscellaneous'
   const genre = classification?.genre?.name || ''
   const sceneScoutCategory = getSceneScoutCategory('ticketmaster', segment, genre)
+
+  // Generate a default image URL if no image available
+  // Use Unsplash API with relevant keywords based on event category
+  const getDefaultImage = (category: string, title: string) => {
+    const keywords = {
+      'music-concerts': 'concert,music,stage',
+      'nightlife-dj': 'nightclub,dj,party',
+      'comedy-improv': 'comedy,stage,performance',
+      'theatre-dance': 'theatre,dance,performance',
+      'food-drink': 'food,festival,dining',
+      'arts-exhibits': 'art,gallery,exhibition',
+      'film-screenings': 'cinema,film,movie',
+      'sports-fitness': 'sports,fitness,stadium',
+      'tech-startups': 'technology,conference,tech',
+      'family-kids': 'family,fun,entertainment',
+    }
+    const keyword = keywords[category as keyof typeof keywords] || 'event,entertainment,venue'
+    return `https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800&h=600&fit=crop&q=80`
+  }
+
+  const finalImageUrl = image?.url || getDefaultImage(sceneScoutCategory, tmEvent.name)
 
   return {
     id: `tm_${tmEvent.id}`,
@@ -114,7 +143,7 @@ function convertTicketmasterEvent(tmEvent: TicketmasterEvent): any {
     price_max: priceRange?.max !== undefined ? priceRange.max : undefined,
     price_currency: priceRange?.currency,
     is_free: priceRange?.min === 0,
-    image_url: image?.url,
+    image_url: finalImageUrl,
     external_url: tmEvent.url,
     external_id: tmEvent.id,
     source: 'ticketmaster',

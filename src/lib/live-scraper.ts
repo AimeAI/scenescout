@@ -287,6 +287,10 @@ export class LiveEventScraper {
             now.setHours(0, 0, 0, 0) // Start of today
 
             if (eventDate >= now || isNaN(eventDate.getTime())) {
+              // Generate default image if none available
+              const defaultImage = 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800&h=600&fit=crop&q=80'
+              const finalImageUrl = tempEvent.imageUrl || defaultImage
+
               events.push({
                 title: tempEvent.title.substring(0, 255),
                 description: tempEvent.description,
@@ -299,7 +303,7 @@ export class LiveEventScraper {
                 price_range: tempEvent.priceRange,
                 external_url: tempEvent.fullUrl,
                 category: this.categorizeEvent(tempEvent.title + ' ' + tempEvent.description),
-                image_url: tempEvent.imageUrl,
+                image_url: finalImageUrl,
                 latitude: venueInfo.lat,
                 longitude: venueInfo.lng
               })
